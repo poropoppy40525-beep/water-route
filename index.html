@@ -698,8 +698,8 @@ function stepRow(k, label, sub, v){
 function openRec(c, from){
   if (!c) return;
   const q = guessQty(c), ret = {};
-  S.products.forEach(p => { if (p.returns) ret[p.key] = q[p.key] || 0; });
-  S.rec = {c, from, q, ret, retTouched: {}, method: '', gps: null};
+  S.products.forEach(p => { if (p.returns) ret[p.key] = 0; });   // starts at 0: returns are entered by hand
+  S.rec = {c, from, q, ret, method: '', gps: null};
   $('#recWhere').textContent = from === 'route' && S.result ? `จุดที่ ${(S.result.cur || 0) + 1} จาก ${S.result.order.length}` : 'บันทึกการส่ง';
   $('#recName').textContent = c.name;
   $('#recInfo').innerHTML = `${esc(c.zone)}${c.note ? ` · <span class="note">📦 ${esc(c.note)}</span>` : ''}`;
@@ -725,12 +725,9 @@ function recPaint(){
 }
 function recSet(k, v){
   const r = S.rec; v = Math.max(0, Math.min(999, Math.round(+v || 0)));
-  if (k.startsWith('r-')){ k = k.slice(2); r.ret[k] = v; r.retTouched[k] = true; }
-  else {
-    r.q[k] = v;
-    const p = S.products.find(x => x.key === k);
-    if (p && p.returns && !r.retTouched[k]) r.ret[k] = v;   // empties back = full ones delivered, until changed by hand
-  }
+  // empties back are counted by hand only: customers often return them a week later, not on the day of delivery
+  if (k.startsWith('r-')) r.ret[k.slice(2)] = v;
+  else r.q[k] = v;
   recPaint();
 }
 $('#p-rec').addEventListener('click', e => {
