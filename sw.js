@@ -1,6 +1,6 @@
 // Service worker for the installed app. The app screen and libraries are kept on the phone so it opens without signal;
 // customer data and saving always go to Google Sheets (records wait in the app's outbox while offline).
-const VERSION = 'a326b94844';
+const VERSION = '67fc5e773d';
 const SHELL = 'shell-' + VERSION, TILES = 'tiles-v1';
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'apple-touch-icon.png',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',

@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="th">
 <head>
+<base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ส่งน้ำวราดา</title>
@@ -132,6 +133,17 @@ body.staff .admin-only{display:none!important}
 .box{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0}
 .prices{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .prices label span{font-size:13px;color:var(--muted)}
+/* reminders, expenses, month report */
+#remind:empty{display:none}
+#remind .banner{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0 0}
+#remind .banner span{flex:1;min-width:150px}
+#remind button{min-height:34px;padding:4px 10px}
+.exl{list-style:none;padding:0;margin:0}
+.exl li{padding:8px 0;border-bottom:1px solid var(--line)}
+.exl .amt{float:right;font-weight:700;font-variant-numeric:tabular-nums}
+.dayrow{padding:10px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.dayrow .dtop{display:flex;justify-content:space-between;gap:8px;font-variant-numeric:tabular-nums}
+.neg{color:var(--bad)}
 @media (max-width: 760px){
   .app{flex-direction:column}
   #map{flex:none;height:38dvh;order:-1}
@@ -150,6 +162,7 @@ body.staff .admin-only{display:none!important}
       <div class="row" id="dayRow">
         <select id="day" aria-label="เลือกวัน"></select>
       </div>
+      <div id="remind"></div>
     </header>
     <nav class="tabs">
       <button id="t-cust" data-t="cust" class="on">ลูกค้า</button>
@@ -239,6 +252,7 @@ body.staff .admin-only{display:none!important}
         <button id="sumReload" style="flex:none">โหลดใหม่</button>
       </div>
       <div id="sum"></div>
+      <button id="mOpen" style="width:100%;margin-top:4px">📊 รายงานรายเดือน</button>
       <h3>ลูกค้าทั้งหมด</h3>
       <input type="search" id="aq" placeholder="ค้นหาชื่อลูกค้า">
       <div class="chips" id="aFilter">
@@ -287,10 +301,39 @@ body.staff .admin-only{display:none!important}
       <div id="hList"><p class="small">กำลังโหลด…</p></div>
     </section>
 
+    <section class="pane" id="p-month" hidden>
+      <button class="link" id="mBack" style="padding-left:0">← กลับไปหน้าบัญชี</button>
+      <h3 style="margin:4px 0 8px">📊 รายงานรายเดือน</h3>
+      <div class="row" style="flex-wrap:nowrap">
+        <select id="mSel" aria-label="เลือกเดือน" style="flex:1"></select>
+        <button id="mReload" style="flex:none">โหลดใหม่</button>
+      </div>
+      <div id="mBody"></div>
+    </section>
+
+    <section class="pane" id="p-exp" hidden>
+      <h3 style="margin-top:0">บันทึกรายจ่าย</h3>
+      <div class="seg two" id="expType" role="group" aria-label="ประเภทรายจ่าย">
+        <button type="button" data-t="น้ำมัน">⛽ น้ำมัน</button>
+        <button type="button" data-t="ค่าข้าว">🍚 ค่าข้าวกลางวัน</button>
+      </div>
+      <label class="f admin-only"><span>วันที่ (เจ้าของบันทึกย้อนหลังได้)</span><input type="date" id="expDate"></label>
+      <label class="f"><span>จำนวนเงินที่จ่ายจริง (บาท)</span><input type="number" id="expAmt" inputmode="decimal" min="1"></label>
+      <label class="f"><span>หมายเหตุ (ถ้ามี)</span><input type="text" id="expNote" maxlength="120"></label>
+      <p class="small" id="expMsg" style="color:var(--bad)"></p>
+      <button type="button" class="primary bigbtn" id="expSave">✓ บันทึกรายจ่าย</button>
+      <button type="button" id="expCancel" style="width:100%;margin-top:8px">กลับ</button>
+      <h4>รายจ่ายวันนี้</h4>
+      <div id="expToday2"></div>
+    </section>
+
     <section class="pane" id="p-more" hidden>
       <div id="syncBox"></div>
+      <h3 style="margin-top:0">⛽🍚 รายจ่ายวันนี้</h3>
+      <div id="expToday"></div>
+      <button id="expAdd" style="margin-top:6px">+ บันทึกรายจ่าย (น้ำมัน / ค่าข้าว)</button>
       <div class="admin-only">
-        <h3 style="margin-top:0">ราคาสินค้า (ราคาปกติ)</h3>
+        <h3>ราคาสินค้า (ราคาปกติ)</h3>
         <div class="prices" id="pPrices"></div>
         <div class="row" style="margin-top:8px"><button class="primary" id="pSave">บันทึกราคา</button><span class="small" id="pMsg"></span></div>
       </div>
@@ -305,7 +348,7 @@ body.staff .admin-only{display:none!important}
       <h3>การเข้าใช้</h3>
       <p class="small" id="roleInfo"></p>
       <button id="logout">ออกจากระบบ / เปลี่ยนรหัส</button>
-      <p class="small" style="margin-top:16px">ข้อมูลเก็บในไฟล์ Google Sheets “พิกัดโรงงาน” (แท็บ ลูกค้า (แอป), บันทึกส่ง, รับชำระ, สินค้า) · ระยะทางคิดจากถนนจริง (OpenStreetMap) ถ้าเชื่อมต่อไม่ได้จะประมาณจากเส้นตรง × 1.3</p>
+      <p class="small" style="margin-top:16px">ข้อมูลเก็บในไฟล์ Google Sheets “พิกัดโรงงาน” (แท็บ ลูกค้า (แอป), บันทึกส่ง, รับชำระ, รายจ่าย, สินค้า) · ระยะทางคิดจากถนนจริง (OpenStreetMap) เครื่องนี้จำระยะทางที่ดึงมาแล้วไว้ ครั้งต่อไปดึงใหม่เฉพาะบ้านที่เพิ่มหรือย้ายตำแหน่ง ถ้าเชื่อมต่อไม่ได้จะประมาณจากเส้นตรง × 1.3</p>
       <button id="reload">โหลดข้อมูลใหม่</button>
     </section>
 
@@ -456,14 +499,16 @@ function drawMarkers(){
 function fit(pts){ if (pts.length > 1) map.fitBounds(pts, {padding:[30,30]}); }
 
 // ---------- views ----------
-const TAB_OF = {form:'cust', rec:'route', hist:'acct'};
-const NO_MAP = ['rec', 'acct', 'hist', 'more'];   // on phones these screens use the whole height
+const TAB_OF = {form:'cust', rec:'route', hist:'acct', month:'acct', exp:'more'};
+const NO_MAP = ['rec', 'acct', 'hist', 'more', 'month', 'exp'];   // on phones these screens use the whole height
 function show(view){
   S.view = view;
-  for (const p of ['cust','form','route','rec','acct','hist','more']) $('#p-'+p).hidden = p !== view;
+  for (const p of ['cust','form','route','rec','acct','hist','more','month','exp']) $('#p-'+p).hidden = p !== view;
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === (TAB_OF[view] || view)));
   $('#bar').hidden = !['cust', 'route'].includes(view);
-  $('#dayRow').hidden = ['acct', 'hist', 'rec', 'more'].includes(view);
+  $('#dayRow').hidden = ['acct', 'hist', 'rec', 'more', 'month', 'exp'].includes(view);
+  $('#remind').hidden = !['cust', 'route'].includes(view);
+  if (['cust', 'route', 'more'].includes(view)) renderExpenses();
   document.body.classList.toggle('nomap', NO_MAP.includes(view));
   setTimeout(() => map.invalidateSize(), 50);
   if (view === 'acct') loadAccounts();
@@ -727,29 +772,40 @@ const outbox = {
   list(){ return store.get('outbox', []); },
   failed(){ return store.get('failed', []); },
   add(rec){ const l = this.list(); l.push(rec); store.set('outbox', l); paintSync(); this.flush(); },
-  busy: false,
-  async flush(){
-    if (this.busy || !S.pin || !this.list().length) return;
+  busy: false, running: null,
+  // a second call while sending waits for the same run, so "flush, then reload" always sees what was just recorded
+  flush(){
+    if (this.running) return this.running;
+    if (!S.pin || !this.list().length) return Promise.resolve();
+    this.running = this.send().finally(() => { this.running = null; });
+    return this.running;
+  },
+  async send(){
     this.busy = true; paintSync();
+    let sentExp = false;
+    const tried = new Set();
     try{
-      for (const rec of this.list()){
+      for (let rec; (rec = this.list().find(x => !tried.has(x.id))); ){   // also picks up records added while sending
+        tried.add(rec.id);
         try{
-          await call('saveDeliveries', [rec]);
+          await call(rec.kind === 'exp' ? 'saveExpenses' : 'saveDeliveries', [rec]);
+          if (rec.kind === 'exp') sentExp = true;
         }catch(err){
           if (err instanceof NetErr || /PIN_WRONG|หลายครั้ง/.test(err.message)) break;   // try again later
           store.set('failed', this.failed().concat([Object.assign({}, rec, {error: err.message})]));   // server refused it: keep it visible, don't block the rest
         }
         store.set('outbox', this.list().filter(x => x.id !== rec.id));
       }
-    } finally { this.busy = false; paintSync(); }
+    } finally { this.busy = false; paintSync(); renderExpenses(); if (sentExp) refreshExpenses(); }
   }
 };
+const outboxLabel = x => x.kind === 'exp' ? `รายจ่าย${x.type} ${baht(x.amount)}` : (S.all.find(c => c.id === x.customerId) || {}).name || x.customerId;
 function paintSync(){
   const n = outbox.list().length, f = outbox.failed().length, el = $('#sync');
   el.className = 'sync' + (n || f ? ' wait' : '');
   el.textContent = f ? `⚠ ส่งไม่ได้ ${f}` : n ? (outbox.busy ? `⏳ กำลังส่ง ${n}` : `⏳ รอส่ง ${n}`) : '';
   $('#syncBox').innerHTML = (n ? `<div class="banner">มี ${n} รายการรอส่งเข้าระบบ จะส่งเองเมื่อมีสัญญาณ <button class="link" id="syncNow">ส่งตอนนี้</button></div>` : '') +
-    (f ? `<div class="banner err">ส่งไม่สำเร็จ ${f} รายการ:<br>${outbox.failed().map(x => `• ${esc((S.all.find(c => c.id === x.customerId) || {}).name || x.customerId)}: ${esc(x.error)}`).join('<br>')}
+    (f ? `<div class="banner err">ส่งไม่สำเร็จ ${f} รายการ:<br>${outbox.failed().map(x => `• ${esc(outboxLabel(x))}: ${esc(x.error)}`).join('<br>')}
       <br><button class="link" id="failClear">ล้างรายการนี้ (บันทึกใหม่ด้วยมือ)</button></div>` : '');
 }
 $('#syncBox').onclick = e => {
@@ -757,6 +813,84 @@ $('#syncBox').onclick = e => {
   if (e.target.id === 'failClear'){ store.set('failed', []); paintSync(); }
 };
 $('#sync').onclick = () => show('more');
+
+// ---------- daily expenses (fuel, lunch): the driver pays them from the day's money ----------
+// Saved through the outbox like deliveries, so they work without signal. Today's list = what the server has
+// plus what this phone recorded (shown at once, even before it is sent).
+const FUEL_DAYS = [1, 3];                       // Date.getDay(): จันทร์ พุธ = วันเติมน้ำมันปกติ
+const EXP_ICON = {'น้ำมัน': '⛽', 'ค่าข้าว': '🍚'};
+function todayExpenses(){
+  const today = localDate(), byId = new Map();
+  (S.expToday && S.expToday.date === today ? S.expToday.list : []).forEach(x => byId.set(x.id, x));
+  const waiting = new Set(outbox.list().map(x => x.id)), serverKnown = !!(S.expToday && S.expToday.date === today);
+  // a copy kept on this phone counts until the server has it; once sent, the server list decides (the owner may have voided it)
+  store.get('exp.' + today, []).forEach(x => { if (!byId.has(x.id) && (waiting.has(x.id) || !serverKnown)) byId.set(x.id, Object.assign({}, x)); });
+  return [...byId.values()].map(x => Object.assign(x, {waiting: waiting.has(x.id)})).sort((a, b) => String(a.time).localeCompare(String(b.time)));
+}
+async function refreshExpenses(){
+  if (!S.pin) return;
+  try{ const today = localDate(); S.expToday = {date: today, list: await call('getExpenses', today)}; renderExpenses(); }catch(e){}
+}
+function expList(list){
+  return list.length ? '<ul class="exl">' + list.map(x => `<li><span class="amt">${baht(x.amount)}</span>${EXP_ICON[x.type] || ''} ${esc(x.type)}
+    <div class="small">${esc(x.time || '')}${x.by ? ' · ' + esc(x.by) : ''}${x.note ? ' · ' + esc(x.note) : ''}${x.waiting ? ' · <span class="note">⏳ รอส่ง</span>' : ''}</div></li>`).join('') + '</ul>'
+    : '<p class="small">วันนี้ยังไม่ได้บันทึกรายจ่าย</p>';
+}
+function renderExpenses(){
+  if (!S.role) { $('#remind').innerHTML = ''; return; }
+  const list = todayExpenses(), has = t => list.some(x => x.type === t), skip = store.get('expSkip.' + localDate(), {});
+  const wd = new Date().getDay(), open = !!todayDay(), out = [];
+  if (FUEL_DAYS.includes(wd) && !has('น้ำมัน') && !skip.fuel)
+    out.push(`<div class="banner"><span>⛽ วันนี้วันเติมน้ำมัน ยังไม่ได้บันทึก</span><button type="button" class="primary" data-exp="น้ำมัน">บันทึก</button><button type="button" class="link" data-skip="fuel">วันนี้ไม่ได้เติม</button></div>`);
+  if (open && !has('ค่าข้าว') && !skip.lunch)
+    out.push(`<div class="banner"><span>🍚 ยังไม่ได้บันทึกค่าข้าวกลางวันวันนี้</span><button type="button" class="primary" data-exp="ค่าข้าว">บันทึก</button><button type="button" class="link" data-skip="lunch">วันนี้ไม่มี</button></div>`);
+  $('#remind').innerHTML = out.join('');
+  const total = list.reduce((s, x) => s + x.amount, 0);
+  const html = expList(list) + (list.length ? `<p class="small">รวมรายจ่ายวันนี้ <b>${baht(total)}</b></p>` : '');
+  $('#expToday').innerHTML = html; $('#expToday2').innerHTML = html;
+}
+$('#remind').onclick = e => {
+  const b = e.target.closest('[data-exp]'); if (b) return openExp(b.dataset.exp);
+  const s = e.target.closest('[data-skip]');
+  if (s){ const k = 'expSkip.' + localDate(), v = store.get(k, {}); v[s.dataset.skip] = true; store.set(k, v); renderExpenses(); }
+};
+function openExp(type, date){
+  S.exp = {type: type || '', back: S.view === 'exp' ? 'more' : S.view};
+  $('#expDate').value = date || localDate(); $('#expDate').max = localDate();
+  $('#expNote').value = ''; $('#expMsg').textContent = '';
+  expPaint(true); show('exp'); $('#p-exp').scrollTop = 0;
+}
+function expPaint(fill){
+  const t = S.exp.type;
+  document.querySelectorAll('#expType button').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  if (fill) $('#expAmt').value = t ? store.get('expLast.' + t, t === 'น้ำมัน' ? 1000 : '') : '';
+  const offDay = t === 'น้ำมัน' && !FUEL_DAYS.includes(new Date().getDay());
+  $('#expNote').placeholder = offDay ? 'วันนี้ไม่ใช่วันเติมปกติ ใส่เหตุผล เช่น ไปส่งไกล' : 'เช่น จำนวนคนงาน';
+}
+$('#expType').onclick = e => { const b = e.target.closest('[data-t]'); if (!b) return; S.exp.type = b.dataset.t; expPaint(true); };
+$('#expAdd').onclick = () => openExp('');
+$('#expCancel').onclick = () => expClose();
+function expClose(){
+  const back = S.exp && S.exp.back; S.exp = null;
+  show(back && back !== 'exp' ? back : 'more');
+  if (back === 'acct') outbox.flush().then(loadSummary);
+}
+$('#expSave').onclick = () => {
+  const t = S.exp.type, amount = Math.round(+$('#expAmt').value * 100) / 100;
+  if (!t){ $('#expMsg').textContent = 'กรุณาเลือก น้ำมัน หรือ ค่าข้าว'; return; }
+  if (!(amount > 0 && amount <= 100000)){ $('#expMsg').textContent = 'กรุณาใส่จำนวนเงินที่จ่ายจริง'; return; }
+  const today = localDate(), date = S.role === 'admin' && $('#expDate').value ? $('#expDate').value : today;
+  if (date > today){ $('#expMsg').textContent = 'บันทึกล่วงหน้าไม่ได้'; return; }
+  const d = new Date();
+  const rec = {kind: 'exp', id: newId('e'), at: d.toISOString(), type: t, amount, note: $('#expNote').value.trim()};
+  if (date !== today) rec.date = date;
+  else store.set('exp.' + today, store.get('exp.' + today, []).concat([{id: rec.id, type: t, amount, note: rec.note,
+    time: `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`, by: S.role === 'admin' ? 'เจ้าของ' : 'คนขับ'}]));
+  store.set('expLast.' + t, amount);
+  outbox.add(rec);
+  toast(`บันทึก${t} ${baht(amount)} แล้ว${date !== today ? ' (วันที่ ' + date + ')' : ''}`);
+  expClose();
+};
 addEventListener('online', () => outbox.flush());
 setInterval(() => outbox.flush(), 60000);
 
@@ -785,27 +919,64 @@ async function osrmTable(pts, src, dst){
   }
   throw new Error('osrm');
 }
-async function matrix(pts, progress){
-  const n = pts.length, B = 50, blocks = [];
-  for (let i = 0; i < n; i += B) blocks.push(Array.from({length: Math.min(B, n - i)}, (_, k) => i + k));
-  const groups = n <= 100 ? [[...pts.keys()]] : blocks, total = groups.length ** 2;
-  try{
-    const dist = pts.map(() => new Array(n)), dur = pts.map(() => new Array(n));
-    let done = 0;
-    for (const src of groups) for (const dst of groups){
-      progress && progress(`กำลังดึงระยะทางตามถนน ${total > 1 ? `(${done + 1}/${total})` : ''}…`);
-      const j = await osrmTable(pts, src, dst);
-      src.forEach((a, x) => dst.forEach((b, y) => {
-        const km = j.distances[x][y], s = j.durations[x][y];
-        dist[a][b] = km == null ? hav(pts[a], pts[b]) * 1.3 : km / 1000;
-        dur[a][b] = s == null ? dist[a][b] / 35 * 3600 : s;
-      }));
-      done++;
-    }
-    return {dist, dur, road: true};
-  }catch(e){}
-  const dist = pts.map(a => pts.map(b => hav(a,b)*1.3));
-  return {dist, dur: dist.map(r => r.map(km => km/35*3600)), road:false};
+// Road distances already fetched are remembered on this phone, per delivery day (meters / seconds).
+// The next calculation only asks the free OSRM server about houses that are new or moved, so it is fast
+// and still works when that server is down or slow. A house that moves gets a new key, so it is fetched again.
+const ptKey = p => `${(+p.lat).toFixed(5)},${(+p.lng).toFixed(5)}`;
+function loadDM(day){
+  const c = store.get('dm.' + day, null);
+  return c && Array.isArray(c.k) && Array.isArray(c.d) && Array.isArray(c.t) ? c : {k: [], d: [], t: []};
+}
+function saveDM(day, keys, dist, dur, old){
+  // keep what is known for every house of this day (also the ones not ticked today), drop houses that left the day
+  const keep = new Set([ptKey(FACTORY), ...active().filter(c => c.date === day).map(ptKey)]);
+  const k = [...new Set(keys.concat(old.k.filter(x => keep.has(x))))];
+  const pos = new Map(keys.map((x, i) => [x, i])), opos = new Map(old.k.map((x, i) => [x, i]));
+  const val = (a, b, M, OM, scale) => {
+    const i = pos.get(a), j = pos.get(b);
+    if (i != null && j != null && M[i][j] != null) return Math.round(M[i][j] * scale);
+    const x = opos.get(a), y = opos.get(b);
+    return x != null && y != null && OM[x] && OM[x][y] != null ? OM[x][y] : null;
+  };
+  store.set('dm.' + day, {k, d: k.map(a => k.map(b => val(a, b, dist, old.d, 1000))), t: k.map(a => k.map(b => val(a, b, dur, old.t, 1)))});
+}
+async function matrix(pts, progress, day){
+  const n = pts.length, keys = pts.map(ptKey), cache = loadDM(day), at = new Map(cache.k.map((k, i) => [k, i]));
+  const dist = pts.map(() => new Array(n).fill(null)), dur = pts.map(() => new Array(n).fill(null));
+  for (let a = 0; a < n; a++) for (let b = 0; b < n; b++){
+    if (keys[a] === keys[b]){ dist[a][b] = 0; dur[a][b] = 0; continue; }
+    const x = at.get(keys[a]), y = at.get(keys[b]);
+    if (x != null && y != null && cache.d[x] && cache.d[x][y] != null && cache.t[x] && cache.t[x][y] != null){ dist[a][b] = cache.d[x][y] / 1000; dur[a][b] = cache.t[x][y]; }
+  }
+  // ask only for the rows that still have unknown pairs (the OSRM demo allows at most 100 coordinates per request)
+  const B = 50, groups = [];
+  if (n <= 100) groups.push([...pts.keys()]);
+  else for (let i = 0; i < n; i += B) groups.push(Array.from({length: Math.min(B, n - i)}, (_, k) => i + k));
+  const jobs = [];
+  for (const src of groups) for (const dst of groups){
+    const rows = src.filter(a => dst.some(b => dist[a][b] == null));
+    if (rows.length) jobs.push([rows, dst]);
+  }
+  let road = true, fresh = 0;
+  for (let j = 0; j < jobs.length; j++){
+    const [src, dst] = jobs[j];
+    progress && progress(`กำลังดึงระยะทางตามถนน${jobs.length > 1 ? ` (${j + 1}/${jobs.length})` : ''}…`);
+    let r;
+    try{ r = await osrmTable(pts, src, dst); }catch(e){ road = false; break; }   // server down or slow: don't wait on every block
+    src.forEach((a, x) => dst.forEach((b, y) => {
+      if (dist[a][b] != null) return;
+      const m = r.distances[x] && r.distances[x][y], s = r.durations[x] && r.durations[x][y];
+      if (m == null || s == null){ dist[a][b] = hav(pts[a], pts[b]) * 1.3; dur[a][b] = dist[a][b] / 35 * 3600; }   // no road found
+      else { dist[a][b] = m / 1000; dur[a][b] = s; }
+      fresh++;
+    }));
+  }
+  if (fresh) saveDM(day, keys, dist, dur, cache);
+  // whatever is still unknown (server unreachable): straight line × 1.3 at 35 km/h, not remembered
+  for (let a = 0; a < n; a++) for (let b = 0; b < n; b++) if (dist[a][b] == null){
+    road = false; dist[a][b] = hav(pts[a], pts[b]) * 1.3; dur[a][b] = dist[a][b] / 35 * 3600;
+  }
+  return {dist, dur, road, asked: jobs.length};
 }
 function tourCost(t, M, ret){ let s = 0; for (let i=0;i<t.length-1;i++) s += M[t[i]][t[i+1]]; if (ret) s += M[t[t.length-1]][0]; return s; }
 function nnTour(M, n, random){
@@ -908,7 +1079,7 @@ $('#go').onclick = async () => {
   say('กำลังคำนวณเส้นทางที่สั้นที่สุด…');
   try{
     const pts = [FACTORY, ...chosen], ret = S.cfg.ret;
-    const M = await matrix(pts, say);
+    const M = await matrix(pts, say, S.day);
     const t = await solve(M.dist, pts.length, ret, say), sheet = pts.map((_,i)=>i);
     S.result = { order: t.slice(1).map(i => pts[i]), km: tourCost(t, M.dist, ret), sec: tourCost(t, M.dur, ret),
                  kmSheet: tourCost(sheet, M.dist, ret), secSheet: tourCost(sheet, M.dur, ret), road: M.road, ret, geom: null, cur: 0, sig: daySig() };
@@ -948,7 +1119,7 @@ function renderResult(){
       <div class="stat"><div class="v">${r.kmSheet.toFixed(1)} กม.</div><div class="l">ถ้าวิ่งตามลำดับในรายการ</div></div>
     </div>
     ${saveKm > 0.05 ? `<p class="save">สั้นกว่าวิ่งตามลำดับในรายการ ${saveKm.toFixed(1)} กม. · ขับน้อยลงราว ${hm(r.secSheet - r.sec)}</p>` : ''}
-    ${r.road ? '' : '<div class="banner">เชื่อมต่อระบบคำนวณถนนไม่ได้ ตัวเลขนี้เป็นค่าประมาณจากเส้นตรง</div>'}
+    ${r.road ? '' : '<div class="banner">เชื่อมต่อระบบคำนวณถนนไม่ได้ ระยะทางบางช่วงเป็นค่าประมาณจากเส้นตรง กด “คำนวณเส้นทาง” อีกครั้งเมื่อมีสัญญาณ ระบบจะดึงเฉพาะส่วนที่ขาด</div>'}
     <h3>ลำดับการส่ง <span class="small">(แตะเพื่อข้ามไปจุดนั้น)</span></h3>
     <ol class="stops">${r.order.map((s,i)=>`<li data-i="${i}" class="${done[s.id]?'done':i===cur?'now':''}"><span class="num">${done[s.id]?'✓':i+1}</span><div style="flex:1;min-width:0"><div class="n">${esc(s.name)}</div><div class="small">${done[s.id] ? `<span class="rec-ok">${esc(done[s.id])}</span>` : esc(s.zone) + (s.note?` · <span class="note">📦 ${esc(s.note)}</span>`:'')}</div></div><a class="go" target="_blank" rel="noopener" href="${navUrl(s)}" aria-label="นำทางไป ${esc(s.name)}">🧭</a></li>`).join('')}</ol>`;
 }
@@ -999,8 +1170,15 @@ async function loadSummary(){
         <div class="stat"><div class="v">${baht(s.transfer)}</div><div class="l">โอน</div></div>
         <div class="stat ${s.credit ? 'alert' : ''}"><div class="v">${baht(s.credit)}</div><div class="l">เชื่อ (ยังไม่ได้เงิน)</div></div>
         <div class="stat"><div class="v">${baht(s.paidCash + s.paidTransfer)}</div><div class="l">รับชำระหนี้เก่า</div></div>
+        <div class="stat"><div class="v">${baht(s.fuel)}</div><div class="l">⛽ น้ำมัน</div></div>
+        <div class="stat"><div class="v">${baht(s.lunch)}</div><div class="l">🍚 ค่าข้าว</div></div>
+        <div class="stat big ${s.net < 0 ? 'alert' : ''}"><div class="v">${baht(s.net)}</div><div class="l">คงเหลือวันนี้ = เงินเข้า ${baht(s.income)} (สด + โอน + รับชำระ) − รายจ่าย ${baht(s.expense)}</div></div>
       </div>
-      <p class="small">รับคืน ถัง ${s.ret.tank} · ลัง ${s.ret.crate} · เงินที่ควรได้รับวันนี้ (สด + โอน + รับชำระ) <b>${baht(s.cash + s.transfer + s.paidCash + s.paidTransfer)}</b></p>`;
+      <p class="small">รับคืน ถัง ${s.ret.tank} · ลัง ${s.ret.crate}</p>
+      <h4>รายจ่ายวันนี้</h4>
+      ${(s.expenses || []).length ? '<ul class="tl">' + s.expenses.map(x => `<li><span class="amt">${baht(x.amount)}</span><b>${EXP_ICON[x.type] || ''} ${esc(x.type)}</b>
+        <div class="d">${esc(x.time)} · ${esc(x.by)}${x.note ? ' · ' + esc(x.note) : ''}</div>${voidBtn(Object.assign({kind: 'exp'}, x))}</li>`).join('') + '</ul>' : '<p class="small">ไม่มีรายจ่าย</p>'}
+      <button class="link" id="sumExp" style="padding-left:0">+ บันทึกรายจ่ายของวันนี้</button>`;
   }catch(err){ $('#sum').innerHTML = `<div class="banner err">โหลดสรุปไม่สำเร็จ: ${esc(err.message)}</div>`; }
 }
 function renderAccounts(){
@@ -1022,6 +1200,52 @@ $('#aFilter').onclick = e => { const b = e.target.closest('[data-f]'); if (!b) r
 $('#alist').onclick = e => { const r = e.target.closest('[data-h]'); if (r) openHist(+r.dataset.h); };
 $('#alist').onkeydown = e => { if (e.key === 'Enter'){ const r = e.target.closest('[data-h]'); if (r) openHist(+r.dataset.h); } };
 $('#sumDate').onchange = loadSummary;
+$('#sum').addEventListener('click', e => { if (e.target.id === 'sumExp') openExp('', $('#sumDate').value); });
+voidClicks($('#sum'), loadSummary);
+
+// ---------- owner: month report ----------
+const thMonth = m => new Date(m + '-01T00:00:00').toLocaleDateString('th-TH', {month: 'long', year: 'numeric'});
+const thDay = d => new Date(d + 'T00:00:00').toLocaleDateString('th-TH', {weekday: 'short', day: 'numeric', month: 'short'});
+function openMonth(){
+  if (!$('#mSel').options.length){
+    const d = new Date(), out = [];
+    for (let i = 0; i < 13; i++){ const x = new Date(d.getFullYear(), d.getMonth() - i, 1), m = localDate(x).slice(0, 7); out.push(`<option value="${m}">${esc(thMonth(m))}</option>`); }
+    $('#mSel').innerHTML = out.join('');
+  }
+  show('month'); $('#p-month').scrollTop = 0; loadMonth();
+}
+async function loadMonth(){
+  const m = $('#mSel').value;
+  $('#mBody').innerHTML = '<p class="small">กำลังโหลดรายงาน…</p>';
+  try{
+    await outbox.flush();
+    const r = await call('getMonthReport', m);
+    if ($('#mSel').value !== m) return;
+    const t = r.total, items = S.products.filter(p => t.q[p.key]).map(p => `${p.name} ${t.q[p.key]}`).join(' · ') || 'ยังไม่มีการส่ง';
+    $('#mBody').innerHTML = `
+      <div class="stats" style="margin-top:10px">
+        <div class="stat big ${t.net < 0 ? 'alert' : ''}"><div class="v">${baht(t.net)}</div><div class="l">คงเหลือทั้งเดือน = เงินเข้า − รายจ่าย</div></div>
+        <div class="stat"><div class="v">${baht(t.income)}</div><div class="l">เงินเข้า (สด ${baht(t.cash + t.paidCash)} · โอน ${baht(t.transfer + t.paidTransfer)})</div></div>
+        <div class="stat"><div class="v">${baht(t.expense)}</div><div class="l">รายจ่าย (⛽ ${baht(t.fuel)} · 🍚 ${baht(t.lunch)})</div></div>
+        <div class="stat"><div class="v">${baht(t.sales)}</div><div class="l">ยอดขาย · ${t.days} วัน · ส่ง ${t.houses} ครั้ง</div></div>
+        <div class="stat ${t.credit ? 'alert' : ''}"><div class="v">${baht(t.credit)}</div><div class="l">ขายเชื่อ (ยังไม่นับเป็นเงินเข้า)</div></div>
+      </div>
+      <p class="small">${esc(items)} · รับคืน ถัง ${t.ret.tank} · ลัง ${t.ret.crate} · ในเงินเข้ามีรับชำระหนี้เก่า ${baht(t.paidCash + t.paidTransfer)}</p>
+      <h4>รายวัน <span class="small">(แตะวันเพื่อดูรายละเอียด)</span></h4>
+      ${r.days.length ? r.days.map(d => `<div class="dayrow" data-day="${esc(d.date)}" role="button" tabindex="0">
+        <div class="dtop"><b>${esc(thDay(d.date))}</b><b class="${d.net < 0 ? 'neg' : ''}">${baht(d.net)}</b></div>
+        <div class="small">เข้า ${baht(d.income)}${d.paidCash + d.paidTransfer ? ` (รับชำระ ${baht(d.paidCash + d.paidTransfer)})` : ''}${d.credit ? ` · เชื่อ ${baht(d.credit)}` : ''} · ส่ง ${d.houses} บ้าน</div>
+        <div class="small">${d.expense ? `จ่าย ⛽ ${baht(d.fuel)} · 🍚 ${baht(d.lunch)}` : 'ไม่มีรายจ่าย'}</div></div>`).join('')
+        : '<p class="small">เดือนนี้ยังไม่มีรายการ</p>'}`;
+  }catch(err){ $('#mBody').innerHTML = `<div class="banner err">โหลดรายงานไม่สำเร็จ: ${esc(err.message)}</div>`; }
+}
+const openDay = d => { $('#sumDate').value = d; show('acct'); $('#p-acct').scrollTop = 0; };
+$('#mBody').onclick = e => { const r = e.target.closest('[data-day]'); if (r) openDay(r.dataset.day); };
+$('#mBody').onkeydown = e => { if (e.key === 'Enter'){ const r = e.target.closest('[data-day]'); if (r) openDay(r.dataset.day); } };
+$('#mOpen').onclick = openMonth;
+$('#mBack').onclick = () => show('acct');
+$('#mSel').onchange = loadMonth;
+$('#mReload').onclick = loadMonth;
 $('#sumReload').onclick = loadAccounts;
 
 // ---------- owner: one customer's history ----------
@@ -1058,16 +1282,20 @@ function renderHist(){
         ${voidBtn(x)}</li>`).join('') + '</ul>' : '<p class="small">ยังไม่มีประวัติ บันทึกการส่งครั้งแรกได้จากปุ่มด้านบน หรือคนขับบันทึกตอนส่ง</p>';
 }
 const voidBtn = x => `<button class="link void" data-void="${esc(x.kind)}:${esc(x.id)}">ยกเลิกรายการนี้</button><span class="confirm" data-vc="${esc(x.id)}" hidden> ยืนยันยกเลิก? <button class="link" data-vyes="${esc(x.kind)}:${esc(x.id)}">ใช่</button> <button class="link" data-vno>ไม่</button></span>`;
-$('#hList').onclick = async e => {
-  const v = e.target.closest('[data-void]'); if (v){ const id = v.dataset.void.split(':')[1]; document.querySelector(`[data-vc="${CSS.escape(id)}"]`).hidden = false; v.hidden = true; return; }
-  if (e.target.closest('[data-vno]')){ renderHist(); return; }
-  const y = e.target.closest('[data-vyes]');
-  if (y){
-    const [kind, id] = y.dataset.vyes.split(':'); y.disabled = true;
-    try{ await call('voidRecord', kind, id); toast('ยกเลิกรายการแล้ว'); openHist(S.hist.id); }
-    catch(err){ toast('ยกเลิกไม่สำเร็จ: ' + err.message); y.disabled = false; }
-  }
-};
+// "ยกเลิกรายการนี้" -> confirm -> void on the server, then reload that screen
+function voidClicks(el, after){
+  el.addEventListener('click', async e => {
+    const v = e.target.closest('[data-void]'); if (v){ const id = v.dataset.void.split(':')[1]; el.querySelector(`[data-vc="${CSS.escape(id)}"]`).hidden = false; v.hidden = true; return; }
+    const no = e.target.closest('[data-vno]'); if (no){ const c = no.closest('[data-vc]'); c.hidden = true; c.previousElementSibling.hidden = false; return; }
+    const y = e.target.closest('[data-vyes]');
+    if (y){
+      const [kind, id] = y.dataset.vyes.split(':'); y.disabled = true;
+      try{ await call('voidRecord', kind, id); toast('ยกเลิกรายการแล้ว'); after(); }
+      catch(err){ toast('ยกเลิกไม่สำเร็จ: ' + err.message); y.disabled = false; }
+    }
+  });
+}
+voidClicks($('#hList'), () => openHist(S.hist.id));
 $('#hBack').onclick = () => { show('acct'); };
 $('#hRec').onclick = () => openRec(S.hist.c, 'hist');
 $('#hEdit').onclick = () => { S.formBack = 'hist'; openForm(S.hist.c); };
@@ -1128,13 +1356,13 @@ $('#pinForm').onsubmit = e => {
 };
 $('#logout').onclick = () => {
   if (outbox.list().length){ toast(`ยังมี ${outbox.list().length} รายการรอส่ง ต่อเน็ตแล้วกด “ส่งตอนนี้” ก่อนออกจากระบบ`); show('more'); return; }
-  S.pin = ''; S.role = null; S.all = []; S.result = null; S.bal = null; store.set('pin', '');
+  S.pin = ''; S.role = null; S.all = []; S.result = null; S.bal = null; S.expToday = null; store.set('pin', ''); renderExpenses();
   renderAll(false); show('cust'); askPin('');
 };
 function applyRole(){
   document.body.classList.toggle('staff', S.role !== 'admin');
   $('#roleInfo').textContent = S.role === 'admin' ? 'เข้าใช้ด้วยรหัสเจ้าของ: เห็นบัญชีและประวัติ แก้ไขลูกค้าและราคาได้'
-    : 'เข้าใช้ด้วยรหัสคนขับ: จัดเส้นทาง นำทาง และบันทึกการส่งได้';
+    : 'เข้าใช้ด้วยรหัสคนขับ: จัดเส้นทาง นำทาง บันทึกการส่ง และบันทึกรายจ่าย (น้ำมัน ค่าข้าว) ได้';
 }
 async function load(){
   if (!S.pin){ askPin(''); return; }
@@ -1149,7 +1377,7 @@ async function load(){
     S.result = null; renderAll(false);
     afterRestore(restoreRoute(), true);   // back from Google Maps: continue where we were (or warn if customers changed)
     fit(drawMarkers());
-    outbox.flush();
+    renderExpenses(); outbox.flush(); refreshExpenses();
   }catch(err){
     if (String(err.message).includes('PIN_WRONG')){ S.pin = ''; store.set('pin', ''); askPin('รหัสไม่ถูกต้อง'); return; }
     if (!$('#lock').hidden){ S.pin = ''; $('#pinMsg').textContent = err.message; return; }
@@ -1158,7 +1386,7 @@ async function load(){
     if (err instanceof NetErr && cached && cached.length && !S.all.length){
       S.all = cached; S.role = S.role || store.get('role', 'staff'); applyRole(); $('#lock').hidden = true;
       S.all.forEach(c => { c.date = dayName(c.date) || c.date; });
-      renderAll(false); afterRestore(restoreRoute(), true); fit(drawMarkers());
+      renderAll(false); afterRestore(restoreRoute(), true); fit(drawMarkers()); renderExpenses();
       toast('ไม่มีสัญญาณ ใช้รายชื่อล่าสุดที่เก็บไว้ในเครื่อง'); return;
     }
     $('#list').innerHTML = `<div class="banner err">โหลดข้อมูลไม่สำเร็จ: ${esc(err.message)}<br><button id="retry" style="margin-top:8px">ลองอีกครั้ง</button></div>`;
