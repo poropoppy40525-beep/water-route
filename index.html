@@ -19,12 +19,12 @@
 <style>
 :root{
   --bg:#f4f7fa; --panel:#ffffff; --text:#14202b; --muted:#5d6b78; --line:#dde4ea;
-  --accent:#0a7bc2; --accent-ink:#ffffff; --good:#1a8a4a; --warn:#b26a00; --bad:#c0392b; --chip:#eaf3fa;
+  --accent:#0a7bc2; --accent-ink:#ffffff; --good:#1a8a4a; --good-ink:#ffffff; --warn:#b26a00; --bad:#c0392b; --chip:#eaf3fa;
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0f161c; --panel:#18222b; --text:#e6edf3; --muted:#9aa8b4; --line:#2a3743;
-    --accent:#4fb0ef; --accent-ink:#06121b; --good:#4cc47f; --warn:#f0a840; --bad:#ff7a6b; --chip:#1f3342;
+    --accent:#4fb0ef; --accent-ink:#06121b; --good:#4cc47f; --good-ink:#06121b; --warn:#f0a840; --bad:#ff7a6b; --chip:#1f3342;
     color-scheme:dark;
   }
 }
@@ -46,6 +46,7 @@ select,input[type=text],input[type=search],input[type=number],input[type=date]{f
 #day{flex:1;min-width:0;width:auto}
 button{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:8px 12px;min-height:42px;cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button.green{background:var(--good);color:var(--good-ink);border-color:var(--good);font-weight:700}
 button.danger{color:var(--bad);border-color:var(--bad);background:none}
 button.link{border:0;background:none;color:var(--accent);padding:4px 6px;min-height:0}
 button:disabled{opacity:.5;cursor:default}
@@ -364,7 +365,7 @@ body.staff .admin-only{display:none!important}
       <div class="admin-only">
         <h3>📋 ชุดรายชื่อลูกค้า</h3>
         <p class="small" id="setInfo"></p>
-        <button id="setBtn"></button>
+        <button id="setBtn" class="green"></button>
         <div class="box" id="setConfirm" hidden>
           <p id="setWarn" style="margin:0 0 8px"></p>
           <div class="row"><button class="primary" id="setYes">ยืนยัน</button><button id="setNo">ยกเลิก</button></div>
@@ -372,6 +373,10 @@ body.staff .admin-only{display:none!important}
       </div>
       <h3>🏭 โรงงาน (จุดเข้า–ออก)</h3>
       <p class="small">799/2 ม.1 ต.ต้นธงชัย อ.เมืองลำปาง จ.ลำปาง 52000 · Plus Code 8GJH+7F9</p>
+      <h3>ลำดับเส้นทาง</h3>
+      <label class="f"><span><input type="radio" name="rmode" value="order"> วิ่งตามลำดับบ้าน (#1, #2, #3 …) ที่จัดไว้</span></label>
+      <label class="f"><span><input type="radio" name="rmode" value="short"> ให้แอปหาเส้นทางที่สั้นที่สุดเอง</span></label>
+      <p class="small" style="margin-top:0">แก้ลำดับบ้านได้ด้วยปุ่ม ▲▼ ในหน้าลูกค้า (รหัสเจ้าของ)</p>
       <label class="f"><span><input type="checkbox" id="ret"> กลับโรงงานหลังส่งเสร็จ</span></label>
       <div class="admin-only">
         <h3>ลูกค้าที่เลิกใช้บริการ</h3>
@@ -463,7 +468,7 @@ const S = {
   jobs: [], jobBusy: false, snap: null,   // งานที่รอบันทึกลงชีต (▲▼ เพิ่ม/แก้บ้าน) ในจอเปลี่ยนไปก่อนแล้ว
   all: [], products: store.get('products', DEFAULT_PRODUCTS),
   day: todayDay() || dayName(store.get('day', '')) || DAYS[0], zone: null, q: '', sel: new Set(),
-  cfg: Object.assign({ret:true}, store.get('cfg', {})),
+  cfg: Object.assign({ret:true, mode:'order'}, store.get('cfg', {})),   // mode: 'order' = วิ่งตามลำดับบ้าน #1, #2, … | 'short' = ให้แอปหาเส้นทางสั้นสุด
   result: null, view: 'cust', editing: null, pick: null, tapMode: false,
   rec: null, bal: null, afilter: '', aq: '', hist: null,
   set: store.get('set', 'เก่า'), counts: null, old: null,   // ชุดรายชื่อที่ใช้อยู่ ('เก่า' | 'ใหม่')
@@ -677,6 +682,11 @@ async function pumpJobs(){
 $('#all').onclick = () => { visible().forEach(c=>S.sel.add(c.id)); clearResult(); renderList(); drawMarkers(); };
 $('#none').onclick = () => { visible().forEach(c=>S.sel.delete(c.id)); clearResult(); renderList(); drawMarkers(); };
 $('#ret').checked = S.cfg.ret;
+document.querySelectorAll('[name=rmode]').forEach(x => { x.checked = x.value === S.cfg.mode; x.onchange = () => {
+  if (!x.checked) return;
+  S.cfg.mode = x.value; store.set('cfg', S.cfg); clearResult(); drawMarkers();
+  toast(x.value === 'order' ? 'เส้นทางจะวิ่งตามลำดับบ้าน กด “คำนวณเส้นทาง” ใหม่' : 'แอปจะหาเส้นทางสั้นสุด กด “คำนวณเส้นทาง” ใหม่');
+}; });
 $('#ret').onchange = e => { S.cfg.ret = e.target.checked; store.set('cfg', S.cfg); clearResult(); drawMarkers(); };
 $('#stopped').onclick = async e => {
   const ask = e.target.closest('[data-del]'), no = e.target.closest('[data-delno]'), yes = e.target.closest('[data-delyes]');
@@ -1341,16 +1351,16 @@ async function geometry(ordered){
 
 // a calculated route is kept per day on this phone, so it survives switching to Google Maps and back
 // fingerprint of the day's customers and their locations: a saved route is only reused while it still matches
-const daySig = () => dayCustomers().map(c => `${c.id}:${(+c.lat).toFixed(6)},${(+c.lng).toFixed(6)}`).sort().join('|');
+const daySig = () => dayCustomers().map(c => `${c.id}:${(+c.lat).toFixed(6)},${(+c.lng).toFixed(6)}` + (S.cfg.mode === 'order' ? `#${c.order || ''}` : '')).sort().join('|');   // ตามลำดับบ้าน: เปลี่ยนลำดับ = ต้องจัดเส้นทางใหม่
 function saveRoute(){
   const r = S.result; if (!r || !S.day) return;
   store.set('route.' + S.day, {ids: r.order.map(c=>c.id), km: r.km, sec: r.sec, kmSheet: r.kmSheet, secSheet: r.secSheet,
-    road: r.road, ret: r.ret, geom: r.geom, cur: r.cur, curDate: new Date().toDateString(), sig: r.sig});
+    road: r.road, ret: r.ret, mode: r.mode, geom: r.geom, cur: r.cur, curDate: new Date().toDateString(), sig: r.sig});
 }
 // returns true (restored), 'stale' (customers added / removed / moved since it was calculated) or false (nothing saved)
 function restoreRoute(){
   const s = store.get('route.' + S.day, null);
-  if (!s || !Array.isArray(s.ids) || !s.ids.length || s.ret !== S.cfg.ret) return false;
+  if (!s || !Array.isArray(s.ids) || !s.ids.length || s.ret !== S.cfg.ret || (s.mode || 'short') !== S.cfg.mode) return false;
   const byId = new Map(dayCustomers().map(c => [c.id, c]));
   const order = s.ids.map(id => byId.get(id));
   if (!s.sig || s.sig !== daySig() || order.some(c => !c)){ store.set('route.' + S.day, null); return 'stale'; }
@@ -1366,13 +1376,14 @@ $('#go').onclick = async () => {
   const btn = $('#go'); btn.disabled = true; btn.textContent = 'กำลังคำนวณ…';
   show('route');
   const say = msg => { $('#result').innerHTML = `<p class="small">${esc(msg)}</p>`; };
-  say('กำลังคำนวณเส้นทางที่สั้นที่สุด…');
+  const byOrder = S.cfg.mode === 'order';
+  say(byOrder ? 'กำลังจัดเส้นทางตามลำดับบ้าน…' : 'กำลังคำนวณเส้นทางที่สั้นที่สุด…');
   try{
-    const pts = [FACTORY, ...chosen], ret = S.cfg.ret;
-    const M = await matrix(pts, say, S.day);
-    const t = await solve(M.dist, pts.length, ret, say), sheet = pts.map((_,i)=>i);
+    const pts = [FACTORY, ...chosen], ret = S.cfg.ret;   // chosen เรียงตามลำดับบ้านอยู่แล้ว (#1, #2, …)
+    const M = await matrix(pts, say, S.day), sheet = pts.map((_,i)=>i);
+    const t = byOrder ? sheet : await solve(M.dist, pts.length, ret, say);
     S.result = { order: t.slice(1).map(i => pts[i]), km: tourCost(t, M.dist, ret), sec: tourCost(t, M.dur, ret),
-                 kmSheet: tourCost(sheet, M.dist, ret), secSheet: tourCost(sheet, M.dur, ret), road: M.road, ret, geom: null, cur: 0, sig: daySig() };
+                 kmSheet: tourCost(sheet, M.dist, ret), secSheet: tourCost(sheet, M.dur, ret), road: M.road, ret, mode: S.cfg.mode, geom: null, cur: 0, sig: daySig() };
     saveRoute(); renderResult(); fit(drawMarkers());
     const geom = await geometry((ret ? [...t, 0] : t).map(i => pts[i]));
     if (S.result && S.result.order.length === chosen.length){ S.result.geom = geom; saveRoute(); drawMarkers(); }
@@ -1406,9 +1417,10 @@ function renderResult(){
     <div class="stats">
       <div class="stat big"><div class="v">${r.km.toFixed(1)} กม.</div><div class="l">ระยะทางรวม ${n} จุด${r.ret?' (ออกและกลับโรงงาน)':' (ออกจากโรงงาน)'}</div></div>
       <div class="stat"><div class="v">${hm(r.sec)}</div><div class="l">เวลาขับโดยประมาณ (ไม่รวมลงของ)</div></div>
-      <div class="stat"><div class="v">${r.kmSheet.toFixed(1)} กม.</div><div class="l">ถ้าวิ่งตามลำดับในรายการ</div></div>
+      ${r.mode === 'order' ? '' : `<div class="stat"><div class="v">${r.kmSheet.toFixed(1)} กม.</div><div class="l">ถ้าวิ่งตามลำดับในรายการ</div></div>`}
     </div>
-    ${saveKm > 0.05 ? `<p class="save">สั้นกว่าวิ่งตามลำดับในรายการ ${saveKm.toFixed(1)} กม. · ขับน้อยลงราว ${hm(r.secSheet - r.sec)}</p>` : ''}
+    ${r.mode === 'order' ? '<p class="small">วิ่งตามลำดับบ้านที่จัดไว้ (#1, #2, …)</p>' : ''}
+    ${r.mode !== 'order' && saveKm > 0.05 ? `<p class="save">สั้นกว่าวิ่งตามลำดับในรายการ ${saveKm.toFixed(1)} กม. · ขับน้อยลงราว ${hm(r.secSheet - r.sec)}</p>` : ''}
     ${r.road ? '' : '<div class="banner">เชื่อมต่อระบบคำนวณถนนไม่ได้ ระยะทางบางช่วงเป็นค่าประมาณจากเส้นตรง กด “คำนวณเส้นทาง” อีกครั้งเมื่อมีสัญญาณ ระบบจะดึงเฉพาะส่วนที่ขาด</div>'}
     <h3>ลำดับการส่ง <span class="small">(แตะเพื่อข้ามไปจุดนั้น)</span></h3>
     <ol class="stops">${r.order.map((s,i)=>`<li data-i="${i}" class="${done[s.id]?'done':i===cur?'now':''}"><span class="num">${done[s.id]?'✓':i+1}</span><div style="flex:1;min-width:0"><div class="n">${esc(s.name)}</div><div class="small">${done[s.id] ? `<span class="rec-ok">${esc(done[s.id])}</span>` : esc(s.zone) + (s.note?` · <span class="note">📝 ${esc(s.note)}</span>`:'')}</div></div><a class="go" target="_blank" rel="noopener" href="${navUrl(s)}" aria-label="นำทางไป ${esc(s.name)}">🧭</a></li>`).join('')}</ol>`;
