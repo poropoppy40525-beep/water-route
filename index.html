@@ -460,7 +460,7 @@ const DEFAULT_PRODUCTS = [
   {key:'p350', name:'แพ็คน้ำ 350 มล.', price:24, returns:false}, {key:'p250', name:'แพ็คน้ำ 250 มล.', price:23, returns:false}];
 const S = {
   pin: store.get('pin', ''), role: null,
-  mvQ: [], mvBusy: false, mvSnap: null,   // ปุ่ม ▲▼ ที่ยังรอบันทึกลงชีต
+  jobs: [], jobBusy: false, snap: null,   // งานที่รอบันทึกลงชีต (▲▼ เพิ่ม/แก้บ้าน) ในจอเปลี่ยนไปก่อนแล้ว
   all: [], products: store.get('products', DEFAULT_PRODUCTS),
   day: todayDay() || dayName(store.get('day', '')) || DAYS[0], zone: null, q: '', sel: new Set(),
   cfg: Object.assign({ret:true}, store.get('cfg', {})),
@@ -575,21 +575,24 @@ function renderList(){
   const canMove = S.set === 'ใหม่' && S.role === 'admin';   // ▲▼ เรียงลำดับจริง (ชุดใหม่ เจ้าของ)
   $('#list').innerHTML = vis.map((c, i) => `
     <div class="cust">
-      ${canMove ? `<div class="mv"><button class="link" data-mv="${c.id}" data-to="${i ? vis[i - 1].id : ''}" aria-label="เลื่อนขึ้น ${esc(c.name)}" ${i ? '' : 'disabled'}>▲</button>
-        <button class="link" data-mv="${c.id}" data-to="${i < vis.length - 1 ? vis[i + 1].id : ''}" aria-label="เลื่อนลง ${esc(c.name)}" ${i < vis.length - 1 ? '' : 'disabled'}>▼</button></div>` : ''}
+      ${canMove ? `<div class="mv"><button class="link" data-mv="${c.id}" data-to="${i ? vis[i - 1].id : ''}" aria-label="เลื่อนขึ้น ${esc(c.name)}" ${i && !c.pending ? '' : 'disabled'}>▲</button>
+        <button class="link" data-mv="${c.id}" data-to="${i < vis.length - 1 ? vis[i + 1].id : ''}" aria-label="เลื่อนลง ${esc(c.name)}" ${i < vis.length - 1 && !c.pending ? '' : 'disabled'}>▼</button></div>` : ''}
       <label><input type="checkbox" data-id="${c.id}" ${S.sel.has(c.id)?'checked':''}>
         <div><div class="n">${esc(c.name)}</div>
         <div class="small">${[c.order ? `#${c.order}` : '', esc(c.zone), c.note ? `<span class="note">📝 ${esc(c.note)}</span>` : ''].filter(Boolean).join(' · ')}</div>
-        ${done[c.id] ? `<div class="rec-ok">✓ วันนี้: ${esc(done[c.id])}</div>` : ''}</div>
+        ${done[c.id] ? `<div class="rec-ok">✓ วันนี้: ${esc(done[c.id])}</div>` : ''}
+        ${c.pending ? '<div class="small">⏳ กำลังบันทึกลงชีต…</div>' : ''}</div>
       </label>
-      <button class="link" data-rec="${c.id}" aria-label="บันทึกการส่ง ${esc(c.name)}">📝</button>
-      <button class="link admin-only" data-edit="${c.id}" aria-label="แก้ไข ${esc(c.name)}">แก้ไข</button>
+      <button class="link" data-rec="${c.id}" aria-label="บันทึกการส่ง ${esc(c.name)}" ${c.pending ? 'disabled' : ''}>📝</button>
+      <button class="link admin-only" data-edit="${c.id}" aria-label="แก้ไข ${esc(c.name)}" ${c.pending ? 'disabled' : ''}>แก้ไข</button>
     </div>`).join('') || '<p class="small">ไม่พบลูกค้าในวันนี้</p>';
   $('#count').textContent = `เลือก ${S.sel.size} จุด`;
 }
 function renderStopped(){
   const st = S.all.filter(c => c.status === 'เลิก');
-  $('#stopped').innerHTML = st.length ? st.map(c => `<div class="cust"><div style="flex:1;min-width:0"><div class="n">${esc(c.name)}</div><div class="small">วัน${esc(c.date)} · ${esc(c.zone)}</div></div><button class="link" data-restore="${c.id}">กู้คืน</button></div>`).join('') : '<p class="small">ยังไม่มี</p>';
+  $('#stopped').innerHTML = st.length ? st.map(c => `<div class="cust"><div style="flex:1;min-width:0"><div class="n">${esc(c.name)}</div><div class="small">วัน${esc(c.date)} · ${esc(c.zone)}</div></div><button class="link" data-restore="${c.id}">กู้คืน</button><button class="link" data-del="${c.id}" style="color:#c0392b">ลบถาวร</button></div>` +
+    (S.delAsk === c.id ? `<div class="confirm"><p style="margin-top:0">ลบ “${esc(c.name)}” ออกจากชีตถาวร? ลบแล้วกู้คืนไม่ได้ (บ้านที่มีบันทึกส่งหรือรับชำระอยู่ ระบบจะไม่ให้ลบ)</p>
+      <div class="row"><button type="button" class="danger" data-delyes="${c.id}">ลบถาวร</button><button type="button" data-delno="1">ไม่ลบ</button></div></div>` : '')).join('') : '<p class="small">ยังไม่มี</p>';
 }
 function renderAll(keepSel){
   renderDays(); renderZones();
@@ -623,53 +626,75 @@ $('#list').onclick = async e => {
   const m = e.target.closest('[data-mv]');
   if (m){   // สลับกับบ้านที่อยู่ติดกันในรายการที่เห็น: ขยับในจอทันที แล้วค่อยบันทึกลงชีตตามหลัง (ไม่ต้องรอเน็ต)
     const c = S.all.find(x => x.id === +m.dataset.mv), to = S.all.find(x => x.id === +m.dataset.to);
-    if (!c || !to) return;
-    if (!S.mvQ.length && !S.mvBusy) S.mvSnap = new Map(S.all.map(x => [x.id, x.order]));   // ไว้ย้อนกลับถ้าบันทึกไม่สำเร็จ
-    S.mvQ.push([c.id, to.order]);
-    moveLocal(c, to);
-    store.set('customers', S.all); clearResult(); renderList(); drawMarkers();
-    pumpMoves();
+    if (!c || !to || c.pending) return;
+    const id = c.id, want = to.order;
+    snapBefore(); moveLocal(c, to);
+    store.set('customers', S.all.filter(x => !x.pending)); clearResult(); renderList(); drawMarkers();
+    queueJob({ run: () => call('moveCustomer', id, want), fail: err => toast('บันทึกลำดับไม่สำเร็จ แสดงลำดับตามชีตแล้ว: ' + err.message) });
     return;
   }
   const b = e.target.closest('[data-edit]'); if (b) return openForm(S.all.find(c => c.id === +b.dataset.edit));
   const r = e.target.closest('[data-rec]'); if (r) openRec(S.all.find(c => c.id === +r.dataset.rec), 'list');
 };
-// ย้ายบ้าน c ไปที่ตำแหน่งของ to ในวันเดียวกัน แล้วเรียงเลข 1, 2, 3 … ใหม่ (ทำแบบเดียวกับ moveCustomer ในระบบหลังบ้าน)
-function moveLocal(c, to){
-  const day = S.all.filter(x => x.date === c.date).sort((a, b) => (a.order || 1e6) - (b.order || 1e6));
-  const down = (c.order || 0) && to.order > c.order;
-  day.splice(day.indexOf(c), 1);
-  day.splice(day.indexOf(to) + (down ? 1 : 0), 0, c);
-  day.forEach((x, i) => { x.order = i + 1; });
+// เลขลำดับในเครื่อง ทำแบบเดียวกับ renumber_ ในระบบหลังบ้าน: เรียง 1, 2, 3 … ทุกวัน บ้านที่เลิกแล้วไม่มีเลข
+function renumberLocal(){
+  const byDay = {};
+  S.all.forEach(x => { if (x.status === 'เลิก'){ delete x.order; return; } (byDay[x.date] = byDay[x.date] || []).push(x); });
+  Object.values(byDay).forEach(l => l.sort((a, b) => (a.order || 1e6) - (b.order || 1e6)).forEach((x, i) => { x.order = i + 1; }));
 }
-// ส่งการเลื่อนลงชีตทีละรายการตามลำดับที่กด
-async function pumpMoves(){
-  if (S.mvBusy) return;
-  S.mvBusy = true;
-  let res = null;
-  try{
-    while (S.mvQ.length){ res = await call('moveCustomer', ...S.mvQ[0]); S.mvQ.shift(); }
-    if (res){   // ใช้เลขลำดับจากชีตเป็นตัวจริง เผื่อในเครื่องคลาดไป
-      const byId = new Map(res.map(x => [x.id, x.order]));
-      S.all.forEach(x => { if (byId.has(x.id)) x.order = byId.get(x.id); });
-    }
-  }catch(err){
-    S.mvQ = [];
-    if (S.mvSnap) S.all.forEach(x => { if (S.mvSnap.has(x.id)) x.order = S.mvSnap.get(x.id); });
-    toast('บันทึกลำดับไม่สำเร็จ ย้อนกลับเป็นลำดับเดิม: ' + err.message);
-  }finally{
-    S.mvBusy = false; S.mvSnap = null;
-    store.set('customers', S.all); renderList(); drawMarkers();
+// วางบ้าน c ที่ลำดับ want (cur = ลำดับเดิมในวันเดียวกัน, 0 = บ้านใหม่หรือย้ายวัน) เหมือน saveCustomer/moveCustomer
+function placeLocal(c, want, cur){ c.order = cur && want > cur ? want + 0.5 : want - 0.5; renumberLocal(); }
+function moveLocal(c, to){ placeLocal(c, to.order, c.order || 0); }
+function bumpCount(d){ if (S.counts){ S.counts[S.set === 'ใหม่' ? 'new' : 'old'] += d; renderSet(); } }
+// งานที่ต้องบันทึกลงชีต ทำทีละงานตามลำดับที่กด ส่วนในจอเปลี่ยนไปก่อนแล้ว ไม่ต้องรอเน็ต
+// เรียกก่อนเปลี่ยนอะไรในจอ: เก็บรายชื่อตอนยังไม่มีงานค้าง ไว้ย้อนกลับถ้าบันทึกไม่สำเร็จและไม่มีเน็ต
+function snapBefore(){ if (!S.jobs.length && !S.jobBusy) S.snap = S.all.filter(x => !x.pending).map(x => Object.assign({}, x)); }
+function queueJob(job){ S.jobs.push(job); pumpJobs(); }
+async function pumpJobs(){
+  if (S.jobBusy) return;
+  S.jobBusy = true;
+  let orders = null, failed = null;
+  while (S.jobs.length){
+    try{ const o = await S.jobs[0].run(); if (o) orders = o; S.jobs.shift(); }
+    catch(err){ failed = {job: S.jobs[0], err}; break; }
   }
+  if (failed){
+    // งานก่อนหน้าอาจบันทึกไปแล้ว: ใช้รายชื่อจากชีตเป็นตัวจริง ถ้าไม่มีเน็ตก็ย้อนกลับเป็นก่อนเริ่ม
+    try{
+      const res = await call('getCustomers');
+      S.all = res.customers; S.all.forEach(x => { x.date = dayName(x.date) || x.date; });
+      if (res.counts){ S.counts = res.counts; renderSet(); }
+    }catch(e){ if (S.snap) S.all = S.snap; }
+    S.jobs = [];
+  } else if (orders && S.set === 'ใหม่'){   // เลขลำดับจากชีตเป็นตัวจริง เผื่อในเครื่องคลาดไป
+    const byId = new Map(orders.map(x => [x.id, x.order]));
+    S.all.forEach(x => { if (byId.has(x.id)){ if (byId.get(x.id)) x.order = byId.get(x.id); else delete x.order; } });
+  }
+  S.jobBusy = false; S.snap = null;
+  store.set('customers', S.all.filter(x => !x.pending)); clearResult(); renderAll(true);
+  if (failed) failed.job.fail(failed.err);
 }
 $('#all').onclick = () => { visible().forEach(c=>S.sel.add(c.id)); clearResult(); renderList(); drawMarkers(); };
 $('#none').onclick = () => { visible().forEach(c=>S.sel.delete(c.id)); clearResult(); renderList(); drawMarkers(); };
 $('#ret').checked = S.cfg.ret;
 $('#ret').onchange = e => { S.cfg.ret = e.target.checked; store.set('cfg', S.cfg); clearResult(); drawMarkers(); };
 $('#stopped').onclick = async e => {
+  const ask = e.target.closest('[data-del]'), no = e.target.closest('[data-delno]'), yes = e.target.closest('[data-delyes]');
+  if (ask || no){ S.delAsk = ask ? +ask.dataset.del : null; renderStopped(); return; }
+  if (yes){
+    const id = +yes.dataset.delyes; yes.disabled = true;
+    try{ await call('deleteCustomer', id); S.all = S.all.filter(c => c.id !== id); S.delAsk = null; store.set('customers', S.all); renderStopped(); toast('ลบออกถาวรแล้ว'); }
+    catch(err){ yes.disabled = false; toast('ลบไม่สำเร็จ: ' + err.message); }
+    return;
+  }
   const b = e.target.closest('[data-restore]'); if (!b) return;
   b.disabled = true;
-  try{ await call('setStatus', +b.dataset.restore, 'ใช้งาน'); S.all.find(c=>c.id===+b.dataset.restore).status = 'ใช้งาน'; S.sel.add(+b.dataset.restore); clearResult(); renderAll(true); toast('กู้คืนลูกค้าแล้ว'); }
+  try{
+    await call('setStatus', +b.dataset.restore, 'ใช้งาน');
+    const c = S.all.find(x => x.id === +b.dataset.restore); c.status = 'ใช้งาน';
+    if (S.set === 'ใหม่'){ delete c.order; renumberLocal(); }   // กู้คืนแล้วไปต่อท้ายวันนั้น (เหมือนในชีต)
+    bumpCount(1); S.sel.add(c.id); store.set('customers', S.all); clearResult(); renderAll(true); toast('กู้คืนลูกค้าแล้ว');
+  }
   catch(err){ b.disabled = false; toast('บันทึกไม่สำเร็จ: ' + err.message); }
 };
 
@@ -870,33 +895,60 @@ $('#form').onsubmit = async e => {
   if (!c.name || !c.date){ $('#formMsg').textContent = 'กรุณาใส่ชื่อและวันส่ง'; return; }
   if (!p){ $('#formMsg').textContent = 'กรุณาใส่ตำแหน่งบ้าน: กดปุ่ม “📍 ใช้ตำแหน่งปัจจุบัน” หรือแตะบนแผนที่'; return; }
   Object.assign(c, {lat: +p.lat.toFixed(6), lng: +p.lng.toFixed(6), plus: p.plus || ''});
-  $('#saveBtn').disabled = true; $('#formMsg').textContent = 'กำลังบันทึกลง Google Sheets…';
-  try{
-    const saved = await call('saveCustomer', c);
-    saved.date = dayName(saved.date) || saved.date;
-    const i = S.all.findIndex(x => x.id === saved.id);
-    if (i >= 0) S.all[i] = saved; else S.all.push(saved);
-    const zl = S.zones && S.zones[saved.date];   // โซนใหม่ที่พิมพ์ ต่อท้ายรายการของวันนั้น (เซิร์ฟเวอร์ทำเหมือนกัน)
-    if (saved.zone && zl && zl.length && !zl.includes(saved.zone)){ zl.push(saved.zone); store.set('zones', S.zones); }
-    if (S.set === 'ใหม่'){
+  // แสดงในจอทันที แล้วบันทึกลงชีตตามหลัง (ไม่ต้องรอเน็ต)
+  const wasNew = !S.editing, back = S.formBack, prev = S.editing ? Object.assign({}, S.editing) : null;
+  const lp = {}; Object.keys(prices).forEach(k => { if (prices[k] !== '' && !isNaN(+prices[k])) lp[k] = +prices[k]; });
+  snapBefore();
+  const local = wasNew ? {id: -Date.now()} : S.editing;
+  Object.assign(local, {name: c.name, date: c.date, zone: c.zone, note: c.note, lat: c.lat, lng: c.lng, plus: c.plus, status: c.status, prices: lp, pending: true});
+  if (wasNew) S.all.push(local);
+  if (S.set === 'ใหม่'){
+    const cur = prev && prev.date === c.date ? (prev.order || 0) : 0;
+    placeLocal(local, Number(c.order) > 0 ? Math.floor(Number(c.order)) : (cur || 1e6), cur);
+  }
+  const zl = S.zones && S.zones[c.date];   // โซนใหม่ที่พิมพ์ ต่อท้ายรายการของวันนั้น (เซิร์ฟเวอร์ทำเหมือนกัน)
+  if (c.zone && zl && zl.length && !zl.includes(c.zone)){ zl.push(c.zone); store.set('zones', S.zones); }
+  if (wasNew) bumpCount(1);
+  closeForm(); clearResult();
+  if (back !== 'hist' && local.date !== S.day) setDay(local.date); else renderAll(true);
+  if (wasNew){ S.sel.add(local.id); renderList(); drawMarkers(); }
+  queueJob({
+    run: async () => {
+      const saved = await call('saveCustomer', c), orders = saved.orders;
+      delete saved.orders;
+      saved.date = dayName(saved.date) || saved.date;
+      if (local.order) saved.order = local.order;   // ลำดับในจออาจเลื่อนต่อไปแล้ว ลำดับจริงจากชีตจะตามมาตอนงานหมด
+      const i = S.all.indexOf(local);
+      if (i >= 0) S.all[i] = saved; else S.all.push(saved);
+      if (S.sel.delete(local.id)) S.sel.add(saved.id);
       if (S.old) S.old = S.old.filter(x => x.id !== saved.id);
-      try{ const res = await call('getCustomers'); S.all = res.customers; S.all.forEach(x => { x.date = dayName(x.date) || x.date; }); store.set('customers', S.all); }catch(e){}   // ลำดับของบ้านอื่นเลื่อนตาม
+      toast(wasNew ? `บันทึก “${saved.name}” ลงชีตแล้ว` : 'บันทึกการแก้ไขแล้ว');
+      return orders;
+    },
+    fail: err => {   // เปิดฟอร์มให้อีกครั้ง ข้อมูลที่กรอกยังอยู่
+      if (wasNew) bumpCount(-1);
+      openForm(wasNew ? null : (S.all.find(x => x.id === c.id) || null));
+      $('#fName').value = c.name; $('#fDate').value = c.date; fillZones(c.date, c.zone);
+      $('#fLoc').value = c.plus || `${c.lat.toFixed(6)}, ${c.lng.toFixed(6)}`; $('#fNote').value = c.note;
+      document.querySelectorAll('#fPrices [data-pk]').forEach(x => { x.value = prices[x.dataset.pk] || ''; });
+      if (!$('#fOrderRow').hidden && c.order) $('#fOrder').value = c.order;
+      updateLocInfo(); drawMarkers();
+      $('#formMsg').textContent = 'บันทึกไม่สำเร็จ: ' + err.message + ' — ข้อมูลที่กรอกยังอยู่ ตรวจแล้วกดบันทึกอีกครั้ง' +
+        (c.linkId ? ' (เลือก “เป็นลูกค้าเดิม” ใหม่ด้วย)' : '') + (wasNew && c.order ? ' (เลือก “ต่อจากบ้านไหน” ใหม่ด้วย)' : '');
     }
-    const wasNew = !S.editing, back = S.formBack;
-    closeForm(); clearResult();
-    if (back !== 'hist'){
-      if (saved.date !== S.day){ setDay(saved.date); } else { renderAll(true); if (wasNew) { S.sel.add(saved.id); renderList(); drawMarkers(); } }
-    } else renderAll(true);
-    toast(wasNew ? 'เพิ่มลูกค้าแล้ว' : 'บันทึกการแก้ไขแล้ว');
-  }catch(err){ $('#formMsg').textContent = 'บันทึกไม่สำเร็จ: ' + err.message; }
-  finally{ $('#saveBtn').disabled = false; }
+  });
 };
 $('#stopBtn').onclick = () => $('#stopConfirm').hidden = false;
 $('#stopNo').onclick = () => $('#stopConfirm').hidden = true;
 $('#stopYes').onclick = async () => {
   const c = S.editing; if (!c) return;
   $('#stopYes').disabled = true;
-  try{ await call('setStatus', c.id, 'เลิก'); c.status = 'เลิก'; S.formBack = null; closeForm(); clearResult(); renderAll(true); toast('ย้ายไปลูกค้าที่เลิกใช้บริการแล้ว'); }
+  try{
+    await call('setStatus', c.id, 'เลิก'); c.status = 'เลิก';
+    if (S.set === 'ใหม่') renumberLocal();   // บ้านที่เลิกไม่กินเลขลำดับ
+    bumpCount(-1); store.set('customers', S.all);
+    S.formBack = null; closeForm(); clearResult(); renderAll(true); toast('ย้ายไปลูกค้าที่เลิกใช้บริการแล้ว');
+  }
   catch(err){ $('#formMsg').textContent = 'บันทึกไม่สำเร็จ: ' + err.message; }
   finally{ $('#stopYes').disabled = false; }
 };
@@ -936,6 +988,7 @@ function stepRow(k, label, sub, v){
 }
 function openRec(c, from){
   if (!c) return;
+  if (c.pending){ toast('รอให้บ้านนี้บันทึกลงชีตเสร็จก่อน'); return; }
   const q = guessQty(c), ret = {};
   S.products.forEach(p => { if (p.returns) ret[p.key] = 0; });   // starts at 0: returns are entered by hand
   S.rec = {c, from, q, ret, method: '', gps: null};
@@ -1600,6 +1653,7 @@ $('#setBtn').onclick = () => {
 $('#setNo').onclick = () => $('#setConfirm').hidden = true;
 $('#setYes').onclick = async () => {
   if (outbox.list().length){ toast('ยังมีรายการรอส่ง กด “ส่งตอนนี้” ก่อน'); return; }
+  if (S.jobs.length || S.jobBusy){ toast('รอให้บันทึกลงชีตเสร็จก่อน (⏳)'); return; }
   $('#setYes').disabled = true;
   try{
     await call('setCustomerSet', S.set === 'ใหม่' ? 'เก่า' : 'ใหม่');
