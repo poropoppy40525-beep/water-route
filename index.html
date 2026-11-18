@@ -460,6 +460,7 @@ const DEFAULT_PRODUCTS = [
   {key:'p350', name:'แพ็คน้ำ 350 มล.', price:24, returns:false}, {key:'p250', name:'แพ็คน้ำ 250 มล.', price:23, returns:false}];
 const S = {
   pin: store.get('pin', ''), role: null,
+  mvQ: [], mvBusy: false, mvSnap: null,   // ปุ่ม ▲▼ ที่ยังรอบันทึกลงชีต
   all: [], products: store.get('products', DEFAULT_PRODUCTS),
   day: todayDay() || dayName(store.get('day', '')) || DAYS[0], zone: null, q: '', sel: new Set(),
   cfg: Object.assign({ret:true}, store.get('cfg', {})),
@@ -620,22 +621,47 @@ $('#zones').onclick = e => { const b = e.target.closest('[data-z]'); if(!b) retu
 $('#list').onchange = e => { const id = e.target.dataset.id; if (id) toggle(+id); };
 $('#list').onclick = async e => {
   const m = e.target.closest('[data-mv]');
-  if (m){   // สลับกับบ้านที่อยู่ติดกันในรายการที่เห็น
+  if (m){   // สลับกับบ้านที่อยู่ติดกันในรายการที่เห็น: ขยับในจอทันที แล้วค่อยบันทึกลงชีตตามหลัง (ไม่ต้องรอเน็ต)
     const c = S.all.find(x => x.id === +m.dataset.mv), to = S.all.find(x => x.id === +m.dataset.to);
-    if (!c || !to || S.moving) return;
-    S.moving = true; document.querySelectorAll('[data-mv]').forEach(x => x.disabled = true);
-    try{
-      const res = await call('moveCustomer', c.id, to.order);
-      const byId = new Map(res.map(x => [x.id, x.order]));
-      S.all.forEach(x => { if (byId.has(x.id)) x.order = byId.get(x.id); });
-      store.set('customers', S.all); clearResult();
-    }catch(err){ toast('เลื่อนไม่สำเร็จ: ' + err.message); }
-    finally{ S.moving = false; renderList(); drawMarkers(); }
+    if (!c || !to) return;
+    if (!S.mvQ.length && !S.mvBusy) S.mvSnap = new Map(S.all.map(x => [x.id, x.order]));   // ไว้ย้อนกลับถ้าบันทึกไม่สำเร็จ
+    S.mvQ.push([c.id, to.order]);
+    moveLocal(c, to);
+    store.set('customers', S.all); clearResult(); renderList(); drawMarkers();
+    pumpMoves();
     return;
   }
   const b = e.target.closest('[data-edit]'); if (b) return openForm(S.all.find(c => c.id === +b.dataset.edit));
   const r = e.target.closest('[data-rec]'); if (r) openRec(S.all.find(c => c.id === +r.dataset.rec), 'list');
 };
+// ย้ายบ้าน c ไปที่ตำแหน่งของ to ในวันเดียวกัน แล้วเรียงเลข 1, 2, 3 … ใหม่ (ทำแบบเดียวกับ moveCustomer ในระบบหลังบ้าน)
+function moveLocal(c, to){
+  const day = S.all.filter(x => x.date === c.date).sort((a, b) => (a.order || 1e6) - (b.order || 1e6));
+  const down = (c.order || 0) && to.order > c.order;
+  day.splice(day.indexOf(c), 1);
+  day.splice(day.indexOf(to) + (down ? 1 : 0), 0, c);
+  day.forEach((x, i) => { x.order = i + 1; });
+}
+// ส่งการเลื่อนลงชีตทีละรายการตามลำดับที่กด
+async function pumpMoves(){
+  if (S.mvBusy) return;
+  S.mvBusy = true;
+  let res = null;
+  try{
+    while (S.mvQ.length){ res = await call('moveCustomer', ...S.mvQ[0]); S.mvQ.shift(); }
+    if (res){   // ใช้เลขลำดับจากชีตเป็นตัวจริง เผื่อในเครื่องคลาดไป
+      const byId = new Map(res.map(x => [x.id, x.order]));
+      S.all.forEach(x => { if (byId.has(x.id)) x.order = byId.get(x.id); });
+    }
+  }catch(err){
+    S.mvQ = [];
+    if (S.mvSnap) S.all.forEach(x => { if (S.mvSnap.has(x.id)) x.order = S.mvSnap.get(x.id); });
+    toast('บันทึกลำดับไม่สำเร็จ ย้อนกลับเป็นลำดับเดิม: ' + err.message);
+  }finally{
+    S.mvBusy = false; S.mvSnap = null;
+    store.set('customers', S.all); renderList(); drawMarkers();
+  }
+}
 $('#all').onclick = () => { visible().forEach(c=>S.sel.add(c.id)); clearResult(); renderList(); drawMarkers(); };
 $('#none').onclick = () => { visible().forEach(c=>S.sel.delete(c.id)); clearResult(); renderList(); drawMarkers(); };
 $('#ret').checked = S.cfg.ret;
