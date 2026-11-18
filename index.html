@@ -61,8 +61,15 @@ button:focus-visible,input:focus-visible,select:focus-visible,a:focus-visible{ou
 .cust label{display:flex;gap:10px;flex:1;min-width:0;cursor:pointer}
 .cust input{width:20px;height:20px;margin-top:2px;flex:none}
 .cust .n{font-weight:600;overflow-wrap:anywhere}
+.cust .mv{display:flex;flex-direction:column;flex:none}
+.cust .mv button{padding:2px 6px;min-height:0;line-height:1.2}
+.cust .mv button:disabled{opacity:.25}
 .small{font-size:13px;color:var(--muted)}
 .note{color:var(--warn)}
+.zlist{margin:6px 0;padding-left:0;list-style:none}
+.zlist li{display:flex;align-items:center;gap:4px;padding:3px 0;border-bottom:1px solid var(--line, rgba(128,128,128,.2))}
+.zlist li span{flex:1;min-width:0}
+.zlist li button{flex:none;min-width:36px;padding:4px 6px}
 .bar{padding:10px 16px calc(10px + env(safe-area-inset-bottom,0px));border-top:1px solid var(--line);display:flex;gap:8px;align-items:center}
 .bar .count{flex:1;font-size:14px;color:var(--muted)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
@@ -190,6 +197,15 @@ body.staff .admin-only{display:none!important}
         <label class="f"><span>วันส่ง *</span><select id="fDate" required></select></label>
         <label class="f"><span>โซน / ย่าน <span id="zoneHint"></span></span><select id="fZoneSel"></select></label>
         <input type="text" id="fZone" placeholder="พิมพ์ชื่อโซน / ย่านใหม่" aria-label="ชื่อโซนใหม่" hidden>
+        <button type="button" class="link" id="zEditBtn" style="margin-top:4px">⚙️ จัดการโซน / ย่าน (เพิ่ม ลบ เรียงลำดับ)</button>
+        <div class="box" id="zBox" hidden>
+          <b id="zTitle">โซน / ย่าน</b>
+          <p class="small" style="margin:4px 0">เรียงตามเส้นทางที่วิ่งจริง · ลบโซนแล้ว ลูกค้าที่อยู่ในโซนนั้นยังเก็บชื่อโซนเดิมไว้</p>
+          <ol id="zList" class="zlist"></ol>
+          <div class="row" style="flex-wrap:nowrap"><input type="text" id="zNew" placeholder="ชื่อโซน / ย่านใหม่" maxlength="60"><button type="button" id="zAdd" style="flex:none">+ เพิ่ม</button></div>
+          <p class="small" id="zMsg" style="color:var(--bad)"></p>
+          <div class="row"><button type="button" class="primary" id="zSave">บันทึกโซน</button><button type="button" id="zCancel">ปิด</button></div>
+        </div>
         <div class="f"><span>ตำแหน่งบ้าน *</span></div>
         <button type="button" class="primary" id="gpsLoc" style="width:100%;padding:12px">📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)</button>
         <p class="small" id="locInfo" style="margin:6px 0"></p>
@@ -204,6 +220,7 @@ body.staff .admin-only{display:none!important}
           <select id="fLink" aria-label="ลูกค้าเดิม"></select>
           <input type="search" id="fLinkQ" placeholder="หรือค้นหาชื่อลูกค้าเดิม" style="margin-top:6px">
         </div>
+        <label class="f" id="fAfterRow" hidden><span>ลำดับในเส้นทาง: ต่อจากบ้านไหน</span><select id="fAfter"></select></label>
         <label class="f" id="fOrderRow" hidden><span>ลำดับในเส้นทางวันนี้ (เปลี่ยนเลขเพื่อย้ายตำแหน่ง)</span><input type="number" id="fOrder" inputmode="numeric" min="1"></label>
         <label class="f"><span>หมายเหตุ</span><input type="text" id="fNote" placeholder="เช่น จุดสังเกตบ้าน วางของตรงไหน"></label>
         <h4>ราคาพิเศษของบ้านนี้</h4>
@@ -448,7 +465,8 @@ const S = {
   cfg: Object.assign({ret:true}, store.get('cfg', {})),
   result: null, view: 'cust', editing: null, pick: null, tapMode: false,
   rec: null, bal: null, afilter: '', aq: '', hist: null,
-  set: store.get('set', 'เก่า'), counts: null, old: null   // ชุดรายชื่อที่ใช้อยู่ ('เก่า' | 'ใหม่')
+  set: store.get('set', 'เก่า'), counts: null, old: null,   // ชุดรายชื่อที่ใช้อยู่ ('เก่า' | 'ใหม่')
+  zones: store.get('zones', {}), zEdit: null
 };
 const active = () => S.all.filter(c => c.status !== 'เลิก');
 const dates = () => DAYS.slice();
@@ -544,15 +562,20 @@ function renderDays(){
   $('#fDate').innerHTML = ds.map(d => `<option value="${esc(d)}">วัน${esc(d)}</option>`).join('');
 }
 function renderZones(){
-  const zs = [...new Set(dayCustomers().map(c=>c.zone).filter(Boolean))];
+  const have = new Set(dayCustomers().map(c=>c.zone).filter(Boolean));
+  const order = dayZones(S.day) || [];   // ลำดับที่เจ้าของจัด แล้วต่อด้วยโซนอื่นที่ลูกค้ามี
+  const zs = order.filter(z => have.has(z)).concat([...have].filter(z => !order.includes(z)));
   if (S.zone && !zs.includes(S.zone)) S.zone = null;
   $('#zones').innerHTML = `<button class="chip ${!S.zone?'on':''}" data-z="">ทุกโซน</button>` +
     zs.map(z => `<button class="chip ${S.zone===z?'on':''}" data-z="${esc(z)}">${esc(z)}</button>`).join('');
 }
 function renderList(){
-  const done = doneToday();
-  $('#list').innerHTML = visible().map(c => `
+  const done = doneToday(), vis = visible();
+  const canMove = S.set === 'ใหม่' && S.role === 'admin';   // ▲▼ เรียงลำดับจริง (ชุดใหม่ เจ้าของ)
+  $('#list').innerHTML = vis.map((c, i) => `
     <div class="cust">
+      ${canMove ? `<div class="mv"><button class="link" data-mv="${c.id}" data-to="${i ? vis[i - 1].id : ''}" aria-label="เลื่อนขึ้น ${esc(c.name)}" ${i ? '' : 'disabled'}>▲</button>
+        <button class="link" data-mv="${c.id}" data-to="${i < vis.length - 1 ? vis[i + 1].id : ''}" aria-label="เลื่อนลง ${esc(c.name)}" ${i < vis.length - 1 ? '' : 'disabled'}>▼</button></div>` : ''}
       <label><input type="checkbox" data-id="${c.id}" ${S.sel.has(c.id)?'checked':''}>
         <div><div class="n">${esc(c.name)}</div>
         <div class="small">${[c.order ? `#${c.order}` : '', esc(c.zone), c.note ? `<span class="note">📝 ${esc(c.note)}</span>` : ''].filter(Boolean).join(' · ')}</div>
@@ -595,7 +618,21 @@ $('#day').onchange = e => setDay(e.target.value);
 $('#q').oninput = e => { S.q = e.target.value; renderList(); };
 $('#zones').onclick = e => { const b = e.target.closest('[data-z]'); if(!b) return; S.zone = b.dataset.z || null; renderZones(); renderList(); };
 $('#list').onchange = e => { const id = e.target.dataset.id; if (id) toggle(+id); };
-$('#list').onclick = e => {
+$('#list').onclick = async e => {
+  const m = e.target.closest('[data-mv]');
+  if (m){   // สลับกับบ้านที่อยู่ติดกันในรายการที่เห็น
+    const c = S.all.find(x => x.id === +m.dataset.mv), to = S.all.find(x => x.id === +m.dataset.to);
+    if (!c || !to || S.moving) return;
+    S.moving = true; document.querySelectorAll('[data-mv]').forEach(x => x.disabled = true);
+    try{
+      const res = await call('moveCustomer', c.id, to.order);
+      const byId = new Map(res.map(x => [x.id, x.order]));
+      S.all.forEach(x => { if (byId.has(x.id)) x.order = byId.get(x.id); });
+      store.set('customers', S.all); clearResult();
+    }catch(err){ toast('เลื่อนไม่สำเร็จ: ' + err.message); }
+    finally{ S.moving = false; renderList(); drawMarkers(); }
+    return;
+  }
   const b = e.target.closest('[data-edit]'); if (b) return openForm(S.all.find(c => c.id === +b.dataset.edit));
   const r = e.target.closest('[data-rec]'); if (r) openRec(S.all.find(c => c.id === +r.dataset.rec), 'list');
 };
@@ -617,7 +654,7 @@ function openForm(c){
   $('#formTitle').textContent = c ? 'แก้ไขข้อมูลลูกค้า' : 'เพิ่มลูกค้าใหม่';
   $('#fName').value = c ? c.name : '';
   $('#fDate').value = (c && dayName(c.date)) || S.day || DAYS[0];
-  fillZones($('#fDate').value, c ? c.zone : (S.zone || ''));
+  fillZones($('#fDate').value, c ? c.zone : (S.zone || '')); $('#zBox').hidden = true;
   $('#fLoc').value = c ? (c.plus || `${c.lat}, ${c.lng}`) : '';
   $('#fNote').value = c ? c.note : '';
   $('#fPrices').innerHTML = S.products.map(p => `<label><span>${esc(p.name)} (ปกติ ${p.price})</span>
@@ -629,6 +666,7 @@ function openForm(c){
   const isNewSet = S.set === 'ใหม่';
   $('#fOrderRow').hidden = !(isNewSet && c); $('#fOrder').value = c && c.order ? c.order : '';
   $('#linkBox').hidden = !(isNewSet && !c); $('#fLinkQ').value = ''; S.linkPrices = null;
+  $('#fAfterRow').hidden = !(isNewSet && !c); fillAfter();
   if (isNewSet && !c) loadOld();
   updateLocInfo(); show('form'); drawMarkers();
   if (S.pick) map.setView([S.pick.lat, S.pick.lng], 16);
@@ -707,10 +745,12 @@ function useGps(){
 }
 $('#gpsLoc').onclick = useGps;
 // zones offered in the form = zones that already have customers on the chosen day (most customers first)
+// วันที่เจ้าของจัดรายการโซนไว้ = ใช้ลำดับนั้น; วันที่ยังไม่จัด = โซนจากลูกค้า (มากไปน้อย)
+const dayZones = day => (S.zones && S.zones[day] && S.zones[day].length) ? S.zones[day].slice() : null;
 function fillZones(day, keep){
   const count = new Map();
   for (const c of active()) if (c.date === day && c.zone) count.set(c.zone, (count.get(c.zone) || 0) + 1);
-  const zs = [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b, 'th'));
+  const zs = dayZones(day) || [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b, 'th'));
   if (keep && !zs.includes(keep)) zs.unshift(keep);
   $('#fZoneSel').innerHTML = '<option value="">— ไม่ระบุ —</option>' +
     zs.map(z => `<option value="${esc(z)}">${esc(z)}${count.get(z) ? ` (${count.get(z)} ราย)` : ''}</option>`).join('') +
@@ -719,7 +759,55 @@ function fillZones(day, keep){
   $('#zoneHint').textContent = `ของวัน${day}`;
   $('#fZone').value = ''; $('#fZone').hidden = true;
 }
-$('#fDate').onchange = () => { fillZones($('#fDate').value, ''); paintLink(); };
+$('#fDate').onchange = () => { fillZones($('#fDate').value, ''); paintLink(); fillAfter(); $('#zBox').hidden = true; };
+// บ้านใหม่ (ชุดใหม่): ปกติต่อท้าย; ลืมบ้านระหว่างทาง เลือก "ต่อจาก #k" ได้ (ส่ง order = k + 1)
+function fillAfter(){
+  if ($('#fAfterRow').hidden) return;
+  const list = active().filter(c => c.date === $('#fDate').value).sort((a, b) => (a.order || 1e6) - (b.order || 1e6));
+  const last = list[list.length - 1];
+  $('#fAfter').innerHTML = (last ? `<option value="">ต่อท้ายสุด (หลัง #${last.order || list.length} ${esc(last.name)})</option>` : '<option value="">บ้านแรกของวัน</option>') +
+    (list.length ? '<option value="1">ไว้เป็นบ้านแรก (#1)</option>' : '') +
+    list.slice(0, -1).map(c => `<option value="${(c.order || 0) + 1}">ต่อจาก #${c.order} ${esc(c.name)}</option>`).join('');
+}
+// ---------- จัดการโซนของวัน (เจ้าของ) ----------
+function zPaint(){
+  $('#zTitle').textContent = `โซน / ย่าน ของวัน${S.zEdit.day}`;
+  $('#zList').innerHTML = S.zEdit.list.map((z, i) => `<li><span>${i + 1}. ${esc(z)}</span>
+    <button type="button" data-zi="${i}" data-zm="-1" aria-label="เลื่อนขึ้น ${esc(z)}" ${i ? '' : 'disabled'}>▲</button>
+    <button type="button" data-zi="${i}" data-zm="1" aria-label="เลื่อนลง ${esc(z)}" ${i < S.zEdit.list.length - 1 ? '' : 'disabled'}>▼</button>
+    <button type="button" data-zi="${i}" data-zd="1" aria-label="ลบ ${esc(z)}">✕</button></li>`).join('') || '<p class="small">ยังไม่มีโซน เพิ่มด้านล่าง</p>';
+}
+$('#zEditBtn').onclick = () => {
+  const day = $('#fDate').value;
+  const count = new Map();
+  for (const c of active()) if (c.date === day && c.zone) count.set(c.zone, (count.get(c.zone) || 0) + 1);
+  S.zEdit = {day, list: dayZones(day) || [...count.keys()].sort((a, b) => count.get(b) - count.get(a) || a.localeCompare(b, 'th'))};
+  $('#zNew').value = ''; $('#zMsg').textContent = ''; zPaint(); $('#zBox').hidden = false;
+};
+$('#zList').onclick = e => {
+  const b = e.target.closest('[data-zi]'); if (!b) return;
+  const i = +b.dataset.zi, L = S.zEdit.list;
+  if (b.dataset.zd) L.splice(i, 1);
+  else { const j = i + +b.dataset.zm; if (j < 0 || j >= L.length) return; [L[i], L[j]] = [L[j], L[i]]; }
+  zPaint();
+};
+$('#zAdd').onclick = () => {
+  const z = $('#zNew').value.trim().replace(/\s+/g, ' ');
+  if (!z) return;
+  if (S.zEdit.list.includes(z)){ $('#zMsg').textContent = 'มีโซนนี้อยู่แล้ว'; return; }
+  S.zEdit.list.push(z); $('#zNew').value = ''; $('#zMsg').textContent = ''; zPaint(); $('#zNew').focus();
+};
+$('#zNew').onkeydown = e => { if (e.key === 'Enter'){ e.preventDefault(); $('#zAdd').click(); } };
+$('#zCancel').onclick = () => $('#zBox').hidden = true;
+$('#zSave').onclick = async () => {
+  $('#zSave').disabled = true; $('#zMsg').textContent = '';
+  try{
+    S.zones = await call('saveZones', S.zEdit.day, S.zEdit.list); store.set('zones', S.zones);
+    const keep = $('#fZoneSel').value === '__new' ? '' : $('#fZoneSel').value;
+    fillZones($('#fDate').value, keep); renderZones(); $('#zBox').hidden = true; toast('บันทึกโซนแล้ว');
+  }catch(err){ $('#zMsg').textContent = 'บันทึกไม่สำเร็จ: ' + err.message; }
+  finally{ $('#zSave').disabled = false; }
+};
 $('#fZoneSel').onchange = () => { const isNew = $('#fZoneSel').value === '__new'; $('#fZone').hidden = !isNew; if (isNew) $('#fZone').focus(); };
 function closeForm(){ const back = S.formBack; S.formBack = null; S.editing = null; S.pick = null; S.tapMode = false; $('#tapLoc').textContent = '🗺️ แตะบนแผนที่'; if (back === 'hist') openHist(S.hist && S.hist.id); else show('cust'); drawMarkers(); }
 function updateLocInfo(){
@@ -748,7 +836,10 @@ $('#form').onsubmit = async e => {
   };
   if (S.set === 'ใหม่'){
     if (S.editing) c.order = $('#fOrder').value.trim();
-    else if (+$('#fLink').value) c.linkId = +$('#fLink').value;
+    else {
+      if (+$('#fLink').value) c.linkId = +$('#fLink').value;
+      if (+$('#fAfter').value) c.order = +$('#fAfter').value;
+    }
   }
   if (!c.name || !c.date){ $('#formMsg').textContent = 'กรุณาใส่ชื่อและวันส่ง'; return; }
   if (!p){ $('#formMsg').textContent = 'กรุณาใส่ตำแหน่งบ้าน: กดปุ่ม “📍 ใช้ตำแหน่งปัจจุบัน” หรือแตะบนแผนที่'; return; }
@@ -759,6 +850,8 @@ $('#form').onsubmit = async e => {
     saved.date = dayName(saved.date) || saved.date;
     const i = S.all.findIndex(x => x.id === saved.id);
     if (i >= 0) S.all[i] = saved; else S.all.push(saved);
+    const zl = S.zones && S.zones[saved.date];   // โซนใหม่ที่พิมพ์ ต่อท้ายรายการของวันนั้น (เซิร์ฟเวอร์ทำเหมือนกัน)
+    if (saved.zone && zl && zl.length && !zl.includes(saved.zone)){ zl.push(saved.zone); store.set('zones', S.zones); }
     if (S.set === 'ใหม่'){
       if (S.old) S.old = S.old.filter(x => x.id !== saved.id);
       try{ const res = await call('getCustomers'); S.all = res.customers; S.all.forEach(x => { x.date = dayName(x.date) || x.date; }); store.set('customers', S.all); }catch(e){}   // ลำดับของบ้านอื่นเลื่อนตาม
@@ -1517,6 +1610,7 @@ async function load(){
     const res = await call('getCustomers');
     S.role = res.role; S.all = res.customers; store.set('pin', S.pin); store.set('role', S.role); applyRole();
     S.set = res.set || 'เก่า'; S.counts = res.counts || null; store.set('set', S.set); renderSet();
+    S.zones = res.zones || {}; store.set('zones', S.zones);
     if (res.products && res.products.length){ S.products = res.products; store.set('products', S.products); }
     store.set('customers', S.all);
     $('#lock').hidden = true;
