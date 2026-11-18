@@ -481,7 +481,9 @@ function parseLoc(s){
   if (!s) return null;
   let m = s.toUpperCase().match(/([23456789CFGHJMPQRVWX]{4,8}\+[23456789CFGHJMPQRVWX]{2,3})/);
   if (m && [4,6,8].includes(m[1].indexOf('+'))) return Object.assign(olcRecover(m[1]), {plus: m[1]});
-  m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || s.match(/@(-?\d+\.\d+),\s*(-?\d+\.\d+)/) || s.match(/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{2,3}\.\d{3,})/);
+  m = s.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) || s.match(/@(-?\d+\.\d+),\s*(-?\d+\.\d+)/) ||
+      s.match(/[?&](?:ll|q|sll|coordinate)=(-?\d+\.\d+)(?:,|%2C)\s*(-?\d+\.\d+)/i) ||          // Apple Maps / Google Maps ?q=lat,lng
+      s.match(/(-?\d{1,2}\.\d{3,})\s*,\s*(-?\d{2,3}\.\d{3,})/);
   if (m){ const lat = +m[1], lng = +m[2]; if (Math.abs(lat) <= 90 && Math.abs(lng) <= 180) return {lat, lng, plus: ''}; }
   return null;
 }
@@ -631,7 +633,13 @@ function openForm(c){
   updateLocInfo(); show('form'); drawMarkers();
   if (S.pick) map.setView([S.pick.lat, S.pick.lng], 16);
   $('#locMore').open = false;
-  if (!c) useGps(); else $('#fName').focus();   // เพิ่มบ้านใหม่: ยืนหน้าบ้าน ดึงตำแหน่งปัจจุบันให้เลย ไม่ต้องใส่โค้ด
+  if (c){ $('#fName').focus(); return; }
+  // เพิ่มบ้านใหม่: ถ้าเคยอนุญาตตำแหน่งแล้ว ดึงให้เลย; ถ้ายัง ต้องรอให้กดปุ่ม
+  // (iPhone ไม่ถามสิทธิ์และไม่ตอบเลย ถ้าขอตำแหน่งโดยไม่ได้มาจากการกด)
+  $('#locInfo').textContent = 'กดปุ่มสีฟ้า เพื่อใช้ตำแหน่งที่ยืนอยู่';
+  try{
+    navigator.permissions.query({name: 'geolocation'}).then(r => { if (r.state === 'granted' && S.view === 'form' && !S.pick) useGps(); }, () => {});
+  }catch(e){}
 }
 // ---------- ชุดใหม่: เลือกลูกค้าเดิม ----------
 async function loadOld(){
@@ -664,23 +672,38 @@ $('#fLink').onchange = () => {
   document.querySelectorAll('#fPrices [data-pk]').forEach(i => { if (!i.value && o.prices && o.prices[i.dataset.pk] != null) i.value = o.prices[i.dataset.pk]; });
 };
 // ---------- GPS ----------
+const IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const LOC_HELP = IOS
+  ? 'วิธีเปิดบน iPhone: การตั้งค่า → ความเป็นส่วนตัวและความปลอดภัย → บริการหาตำแหน่ง → เปิด แล้วเลือก “เว็บไซต์ Safari” → “ขณะใช้แอป” จากนั้นปิดแอปนี้แล้วเปิดใหม่ กดปุ่มอีกครั้ง'
+  : 'เปิดสิทธิ์ “ตำแหน่ง” ให้เบราว์เซอร์ในการตั้งค่ามือถือ แล้วกดปุ่มอีกครั้ง';
+// ปุ่มไม่ถูกล็อก: กดซ้ำได้เสมอ คำตอบของการกดครั้งก่อนจะถูกทิ้ง
 function useGps(){
-  const done = () => { $('#gpsLoc').disabled = false; $('#gpsLoc').textContent = '📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)'; };
+  const ticket = (useGps.n = (useGps.n || 0) + 1);
+  const mine = () => ticket === useGps.n;
+  const reset = () => { if (mine()){ clearTimeout(useGps.t); $('#gpsLoc').textContent = '📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)'; } };
   if (!navigator.geolocation){ $('#locInfo').textContent = 'เครื่องนี้ใช้ตำแหน่งไม่ได้ แตะบนแผนที่ หรือพิมพ์เองแทน'; $('#locMore').open = true; return; }
-  $('#gpsLoc').disabled = true; $('#gpsLoc').textContent = '⏳ กำลังหาตำแหน่ง…';
+  $('#gpsLoc').textContent = '⏳ กำลังหาตำแหน่ง… (กดซ้ำได้)';
   $('#locInfo').textContent = 'ถ้ามือถือถามสิทธิ์ใช้ตำแหน่ง ให้กด “อนุญาต”';
+  clearTimeout(useGps.t);
+  useGps.t = setTimeout(() => {   // มือถือไม่ตอบเลย (มักเป็นเพราะปิดสิทธิ์ตำแหน่งไว้)
+    if (!mine()) return;
+    reset(); $('#locMore').open = true;
+    $('#locInfo').textContent = 'ยังไม่ได้ตำแหน่งจากมือถือ ' + LOC_HELP + ' หรือแตะบนแผนที่แทน';
+  }, 25000);
   navigator.geolocation.getCurrentPosition(p => {
-    done();
+    if (!mine()) return;
+    reset();
     if (S.view !== 'form') return;
     $('#fLoc').value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`; updateLocInfo();
     const acc = Math.round(p.coords.accuracy || 0);
     $('#locInfo').innerHTML += ` <span class="${acc > 30 ? 'note' : 'small'}">· คลาดเคลื่อนประมาณ ${acc} ม.${acc > 30 ? ' (สัญญาณอ่อน ตรวจหมุดบนแผนที่ หรือแตะแก้)' : ''}</span>`;
     drawMarkers(); map.setView([S.pick.lat, S.pick.lng], 17); paintLink();
   }, err => {
-    done(); $('#locMore').open = true;
-    $('#locInfo').textContent = err && err.code === 1 ? 'มือถือไม่อนุญาตให้ใช้ตำแหน่ง: เปิดสิทธิ์ “ตำแหน่ง” ให้ Safari/Chrome ในการตั้งค่ามือถือ แล้วกดปุ่มอีกครั้ง หรือแตะบนแผนที่แทน'
+    if (!mine()) return;
+    reset(); $('#locMore').open = true;
+    $('#locInfo').textContent = err && err.code === 1 ? 'มือถือไม่อนุญาตให้ใช้ตำแหน่ง ' + LOC_HELP + ' หรือแตะบนแผนที่แทน'
       : 'หาตำแหน่งไม่ได้ ลองกดอีกครั้งในที่โล่ง หรือแตะบนแผนที่แทน';
-  }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 0});
+  }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 10000});
 }
 $('#gpsLoc').onclick = useGps;
 // zones offered in the form = zones that already have customers on the chosen day (most customers first)
