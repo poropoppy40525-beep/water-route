@@ -509,6 +509,7 @@ function show(view){
   $('#dayRow').hidden = ['acct', 'hist', 'rec', 'more', 'month', 'exp'].includes(view);
   $('#remind').hidden = !['cust', 'route'].includes(view);
   if (['cust', 'route', 'more'].includes(view)) renderExpenses();
+  if (['cust', 'route'].includes(view) && S.role && !(S.doneSrv && Date.now() - S.doneSrv.at < 30000)) refreshDone();
   document.body.classList.toggle('nomap', NO_MAP.includes(view));
   setTimeout(() => map.invalidateSize(), 50);
   if (view === 'acct') loadAccounts();
@@ -678,9 +679,28 @@ $('#stopYes').onclick = async () => {
 };
 
 // ---------- delivery record (driver) ----------
-// what this phone recorded today, so the route shows which houses are done
-function doneToday(){ return store.get('done.' + localDate(), {}); }
-function markDone(id, text){ const d = doneToday(); d[id] = text; store.set('done.' + localDate(), d); }
+// Which houses are done today = what the server has for today (so a record the owner voids disappears)
+// plus what this phone recorded that is still waiting in the outbox (works without signal).
+// Before the server list arrives, everything this phone recorded counts.
+function doneToday(){
+  const today = localDate(), out = {}, local = store.get('done.' + today, {});
+  const known = S.doneSrv && S.doneSrv.date === today, waiting = new Set(outbox.list().map(x => x.id));
+  if (known) S.doneSrv.list.forEach(x => { out[x.cust] = recSummary(x.q, x.ret, x.method, x.amount); });
+  for (const [cust, v] of Object.entries(local)){
+    const rec = typeof v === 'string' ? {text: v} : v;            // older phones stored only the text
+    if (!known || (rec.rid && waiting.has(rec.rid))) out[cust] = rec.text;
+  }
+  return out;
+}
+function markDone(custId, rid, text){ const k = 'done.' + localDate(), d = store.get(k, {}); d[custId] = {rid, text}; store.set(k, d); }
+async function refreshDone(){
+  if (!S.pin) return;
+  try{
+    const today = localDate();
+    S.doneSrv = {date: today, list: await call('getDayDeliveries', today), at: Date.now()};
+    renderList(); if (S.result && S.view === 'route') renderResult(); drawMarkers();
+  }catch(e){}
+}
 function guessQty(c){
   const last = store.get('last.' + c.id, null);
   if (last) return Object.assign({}, last);
@@ -748,10 +768,11 @@ $('#recSave').onclick = () => {
   if (amt > 0 && !r.method){ $('#recMsg').textContent = 'กรุณาเลือกวิธีจ่าย: เงินสด โอน หรือเชื่อ'; return; }
   const q = {}, ret = {};
   S.products.forEach(p => { q[p.key] = r.q[p.key] || 0; if (p.returns) ret[p.key] = r.ret[p.key] || 0; });
-  outbox.add({id: newId('d'), at: new Date().toISOString(), customerId: r.c.id, q, ret, method: amt ? r.method : '',
+  const rid = newId('d');
+  markDone(r.c.id, rid, recSummary(q, ret, r.method, amt));
+  outbox.add({id: rid, at: new Date().toISOString(), customerId: r.c.id, q, ret, method: amt ? r.method : '',
               note: $('#recNote').value.trim(), lat: r.gps && r.gps.lat, lng: r.gps && r.gps.lng});
   store.set('last.' + r.c.id, q);
-  markDone(r.c.id, recSummary(q, ret, r.method, amt));
   toast(`บันทึกแล้ว ${baht(amt)}${amt ? ' ' + r.method : ''}`);
   recClose(true);
 };
@@ -779,21 +800,21 @@ const outbox = {
   },
   async send(){
     this.busy = true; paintSync();
-    let sentExp = false;
+    let sentExp = false, sentDel = false;
     const tried = new Set();
     try{
       for (let rec; (rec = this.list().find(x => !tried.has(x.id))); ){   // also picks up records added while sending
         tried.add(rec.id);
         try{
           await call(rec.kind === 'exp' ? 'saveExpenses' : 'saveDeliveries', [rec]);
-          if (rec.kind === 'exp') sentExp = true;
+          if (rec.kind === 'exp') sentExp = true; else sentDel = true;
         }catch(err){
           if (err instanceof NetErr || /PIN_WRONG|หลายครั้ง/.test(err.message)) break;   // try again later
           store.set('failed', this.failed().concat([Object.assign({}, rec, {error: err.message})]));   // server refused it: keep it visible, don't block the rest
         }
         store.set('outbox', this.list().filter(x => x.id !== rec.id));
       }
-    } finally { this.busy = false; paintSync(); renderExpenses(); if (sentExp) refreshExpenses(); }
+    } finally { this.busy = false; paintSync(); renderExpenses(); if (sentExp) refreshExpenses(); if (sentDel) refreshDone(); }
   }
 };
 const outboxLabel = x => x.kind === 'exp' ? `รายจ่าย${x.type} ${baht(x.amount)}` : (S.all.find(c => c.id === x.customerId) || {}).name || x.customerId;
@@ -1353,7 +1374,7 @@ $('#pinForm').onsubmit = e => {
 };
 $('#logout').onclick = () => {
   if (outbox.list().length){ toast(`ยังมี ${outbox.list().length} รายการรอส่ง ต่อเน็ตแล้วกด “ส่งตอนนี้” ก่อนออกจากระบบ`); show('more'); return; }
-  S.pin = ''; S.role = null; S.all = []; S.result = null; S.bal = null; S.expToday = null; store.set('pin', ''); renderExpenses();
+  S.pin = ''; S.role = null; S.all = []; S.result = null; S.bal = null; S.expToday = null; S.doneSrv = null; store.set('pin', ''); renderExpenses();
   renderAll(false); show('cust'); askPin('');
 };
 function applyRole(){
@@ -1374,7 +1395,7 @@ async function load(){
     S.result = null; renderAll(false);
     afterRestore(restoreRoute(), true);   // back from Google Maps: continue where we were (or warn if customers changed)
     fit(drawMarkers());
-    renderExpenses(); outbox.flush(); refreshExpenses();
+    renderExpenses(); outbox.flush(); refreshExpenses(); refreshDone();
   }catch(err){
     if (String(err.message).includes('PIN_WRONG')){ S.pin = ''; store.set('pin', ''); askPin('รหัสไม่ถูกต้อง'); return; }
     if (!$('#lock').hidden){ S.pin = ''; $('#pinMsg').textContent = err.message; return; }
