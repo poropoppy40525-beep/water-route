@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="th">
 <head>
-<base target="_top">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ส่งน้ำวราดา</title>
@@ -191,14 +190,22 @@ body.staff .admin-only{display:none!important}
         <label class="f"><span>วันส่ง *</span><select id="fDate" required></select></label>
         <label class="f"><span>โซน / ย่าน <span id="zoneHint"></span></span><select id="fZoneSel"></select></label>
         <input type="text" id="fZone" placeholder="พิมพ์ชื่อโซน / ย่านใหม่" aria-label="ชื่อโซนใหม่" hidden>
-        <label class="f"><span>ตำแหน่งบ้าน *</span>
-          <input type="text" id="fLoc" placeholder="Plus Code เช่น 8GC6+RV4 หรือ พิกัด 18.33, 99.52">
-        </label>
-        <div class="row">
-          <button type="button" id="tapLoc">📍 แตะบนแผนที่</button>
-          <span class="small" id="locInfo"></span>
+        <div class="f"><span>ตำแหน่งบ้าน *</span></div>
+        <button type="button" class="primary" id="gpsLoc" style="width:100%;padding:12px">📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)</button>
+        <p class="small" id="locInfo" style="margin:6px 0"></p>
+        <details id="locMore">
+          <summary class="small">ตำแหน่งไม่ตรง? แตะบนแผนที่ หรือพิมพ์เอง</summary>
+          <div class="row" style="margin-top:6px"><button type="button" id="tapLoc">🗺️ แตะบนแผนที่</button></div>
+          <input type="text" id="fLoc" aria-label="ตำแหน่งบ้าน" placeholder="Plus Code, พิกัด 18.33, 99.52 หรือวางลิงก์ Google Maps" style="margin-top:6px">
+        </details>
+        <div class="box" id="linkBox" hidden>
+          <b>เป็นลูกค้าเดิมไหม?</b>
+          <p class="small" style="margin:4px 0">ถ้าเป็นบ้านเดิม ประวัติส่ง หนี้ ถังค้าง และราคาพิเศษจะตามมาด้วย</p>
+          <select id="fLink" aria-label="ลูกค้าเดิม"></select>
+          <input type="search" id="fLinkQ" placeholder="หรือค้นหาชื่อลูกค้าเดิม" style="margin-top:6px">
         </div>
-        <label class="f"><span>หมายเหตุ (จำนวนของ ฯลฯ)</span><input type="text" id="fNote" placeholder="เช่น 2 ลัง 1 ถัง"></label>
+        <label class="f" id="fOrderRow" hidden><span>ลำดับในเส้นทางวันนี้ (เปลี่ยนเลขเพื่อย้ายตำแหน่ง)</span><input type="number" id="fOrder" inputmode="numeric" min="1"></label>
+        <label class="f"><span>หมายเหตุ</span><input type="text" id="fNote" placeholder="เช่น จุดสังเกตบ้าน วางของตรงไหน"></label>
         <h4>ราคาพิเศษของบ้านนี้</h4>
         <p class="small" style="margin:0 0 6px">เว้นว่าง = ใช้ราคาปกติ</p>
         <div class="prices" id="fPrices"></div>
@@ -288,7 +295,7 @@ body.staff .admin-only{display:none!important}
       </div>
       <div class="box" id="openBox" hidden>
         <b>ยอดยกมา</b>
-        <p class="small" style="margin:4px 0">ใส่ถัง ลัง และหนี้ที่บ้านนี้ค้างอยู่ก่อนเริ่มบันทึกในแอป ระบบจะบวกเพิ่มจากยอดปัจจุบัน</p>
+        <p class="small" style="margin:4px 0">ใส่ถัง ลัง และหนี้ที่บ้านนี้ค้างอยู่ก่อนเริ่มบันทึกในแอป ระบบจะบวกเพิ่มจากยอดปัจจุบัน · หมายเหตุเก่า (จำนวนของที่เคยจด) ดูได้ในชีตแท็บ “หมายเหตุเก่า (สำรอง)”</p>
         <div class="prices">
           <label><span>ถังค้าง</span><input type="number" id="opTank" inputmode="numeric" min="0"></label>
           <label><span>ลังค้าง</span><input type="number" id="opCrate" inputmode="numeric" min="0"></label>
@@ -337,6 +344,15 @@ body.staff .admin-only{display:none!important}
         <div class="prices" id="pPrices"></div>
         <div class="row" style="margin-top:8px"><button class="primary" id="pSave">บันทึกราคา</button><span class="small" id="pMsg"></span></div>
       </div>
+      <div class="admin-only">
+        <h3>📋 ชุดรายชื่อลูกค้า</h3>
+        <p class="small" id="setInfo"></p>
+        <button id="setBtn"></button>
+        <div class="box" id="setConfirm" hidden>
+          <p id="setWarn" style="margin:0 0 8px"></p>
+          <div class="row"><button class="primary" id="setYes">ยืนยัน</button><button id="setNo">ยกเลิก</button></div>
+        </div>
+      </div>
       <h3>🏭 โรงงาน (จุดเข้า–ออก)</h3>
       <p class="small">799/2 ม.1 ต.ต้นธงชัย อ.เมืองลำปาง จ.ลำปาง 52000 · Plus Code 8GJH+7F9</p>
       <label class="f"><span><input type="checkbox" id="ret"> กลับโรงงานหลังส่งเสร็จ</span></label>
@@ -348,7 +364,7 @@ body.staff .admin-only{display:none!important}
       <h3>การเข้าใช้</h3>
       <p class="small" id="roleInfo"></p>
       <button id="logout">ออกจากระบบ / เปลี่ยนรหัส</button>
-      <p class="small" style="margin-top:16px">ข้อมูลเก็บในไฟล์ Google Sheets “พิกัดโรงงาน” (แท็บ ลูกค้า (แอป), บันทึกส่ง, รับชำระ, รายจ่าย, สินค้า) · ระยะทางคิดจากถนนจริง (OpenStreetMap) เครื่องนี้จำระยะทางที่ดึงมาแล้วไว้ ครั้งต่อไปดึงใหม่เฉพาะบ้านที่เพิ่มหรือย้ายตำแหน่ง ถ้าเชื่อมต่อไม่ได้จะประมาณจากเส้นตรง × 1.3</p>
+      <p class="small" style="margin-top:16px">ข้อมูลเก็บในไฟล์ Google Sheets “พิกัดโรงงาน” (แท็บ ลูกค้า (แอป) หรือ ลูกค้า (ใหม่), บันทึกส่ง, รับชำระ, รายจ่าย, สินค้า) · ระยะทางคิดจากถนนจริง (OpenStreetMap) เครื่องนี้จำระยะทางที่ดึงมาแล้วไว้ ครั้งต่อไปดึงใหม่เฉพาะบ้านที่เพิ่มหรือย้ายตำแหน่ง ถ้าเชื่อมต่อไม่ได้จะประมาณจากเส้นตรง × 1.3</p>
       <button id="reload">โหลดข้อมูลใหม่</button>
     </section>
 
@@ -431,7 +447,8 @@ const S = {
   day: todayDay() || dayName(store.get('day', '')) || DAYS[0], zone: null, q: '', sel: new Set(),
   cfg: Object.assign({ret:true}, store.get('cfg', {})),
   result: null, view: 'cust', editing: null, pick: null, tapMode: false,
-  rec: null, bal: null, afilter: '', aq: '', hist: null
+  rec: null, bal: null, afilter: '', aq: '', hist: null,
+  set: store.get('set', 'เก่า'), counts: null, old: null   // ชุดรายชื่อที่ใช้อยู่ ('เก่า' | 'ใหม่')
 };
 const active = () => S.all.filter(c => c.status !== 'เลิก');
 const dates = () => DAYS.slice();
@@ -474,7 +491,7 @@ const map = L.map('map').setView([18.33, 99.52], 12);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'}).addTo(map);
 const layer = L.layerGroup().addTo(map);
 const pin = (txt, color, cls='') => L.divIcon({className:'', html:`<div class="pin ${cls}" style="background:${color}">${txt}</div>`, iconSize:[28,28], iconAnchor:[14,14]});
-function dayCustomers(){ return active().filter(c => c.date === S.day); }
+function dayCustomers(){ return active().filter(c => c.date === S.day).sort((a, b) => (a.order || 1e6) - (b.order || 1e6)); }   // ชุดใหม่: เรียงตามลำดับจริง
 function visible(){
   const q = S.q.trim().toLowerCase();
   return dayCustomers().filter(c => (!S.zone || c.zone === S.zone) && (!q || (c.name+' '+c.note).toLowerCase().includes(q)));
@@ -488,7 +505,7 @@ function drawMarkers(){
     const on = S.sel.has(c.id), n = order && order.get(c.id);
     const color = n ? (n-1 < cur ? '#8a99a6' : n-1 === cur ? '#e67e22' : 'var(--accent)') : on ? 'var(--accent)' : '#8a99a6';
     L.marker([c.lat, c.lng], {icon: pin(n || (on?'✓':''), color), zIndexOffset: n-1 === cur ? 1500 : 0})
-      .bindPopup(`<b>${esc(c.name)}</b><br>${esc(c.zone)}${c.note?'<br>📦 '+esc(c.note):''}<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}">เปิดใน Google Maps</a>`)
+      .bindPopup(`<b>${esc(c.name)}</b><br>${esc(c.zone)}${c.note?'<br>📝 '+esc(c.note):''}<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}">เปิดใน Google Maps</a>`)
       .addTo(layer);
     pts.push([c.lat, c.lng]);
   }
@@ -536,7 +553,7 @@ function renderList(){
     <div class="cust">
       <label><input type="checkbox" data-id="${c.id}" ${S.sel.has(c.id)?'checked':''}>
         <div><div class="n">${esc(c.name)}</div>
-        <div class="small">${esc(c.zone)}${c.note?` · <span class="note">📦 ${esc(c.note)}</span>`:''}</div>
+        <div class="small">${[c.order ? `#${c.order}` : '', esc(c.zone), c.note ? `<span class="note">📝 ${esc(c.note)}</span>` : ''].filter(Boolean).join(' · ')}</div>
         ${done[c.id] ? `<div class="rec-ok">✓ วันนี้: ${esc(done[c.id])}</div>` : ''}</div>
       </label>
       <button class="link" data-rec="${c.id}" aria-label="บันทึกการส่ง ${esc(c.name)}">📝</button>
@@ -606,10 +623,66 @@ function openForm(c){
   $('#formMsg').textContent = '';
   $('#stopBox').hidden = !c; $('#stopConfirm').hidden = true;
   S.pick = c ? {lat:c.lat, lng:c.lng} : null;
+  // ชุดใหม่: บ้านที่เพิ่มใหม่เลือกได้ว่าเป็นลูกค้าเดิมคนไหน; บ้านที่มีอยู่แล้วแก้ลำดับได้
+  const isNewSet = S.set === 'ใหม่';
+  $('#fOrderRow').hidden = !(isNewSet && c); $('#fOrder').value = c && c.order ? c.order : '';
+  $('#linkBox').hidden = !(isNewSet && !c); $('#fLinkQ').value = ''; S.linkPrices = null;
+  if (isNewSet && !c) loadOld();
   updateLocInfo(); show('form'); drawMarkers();
   if (S.pick) map.setView([S.pick.lat, S.pick.lng], 16);
-  $('#fName').focus();
+  $('#locMore').open = false;
+  if (!c) useGps(); else $('#fName').focus();   // เพิ่มบ้านใหม่: ยืนหน้าบ้าน ดึงตำแหน่งปัจจุบันให้เลย ไม่ต้องใส่โค้ด
 }
+// ---------- ชุดใหม่: เลือกลูกค้าเดิม ----------
+async function loadOld(){
+  if (S.old) return paintLink();
+  $('#fLink').innerHTML = '<option value="">กำลังโหลดรายชื่อลูกค้าเดิม…</option>';
+  try{ S.old = await call('getOldCustomers'); S.old.forEach(c => { c.date = dayName(c.date) || c.date; }); }
+  catch(err){ S.old = null; $('#fLink').innerHTML = '<option value="">บ้านใหม่ (โหลดรายชื่อเดิมไม่ได้)</option>'; return; }
+  paintLink();
+}
+function paintLink(){
+  if (!S.old || $('#linkBox').hidden) return;
+  const keep = $('#fLink').value, q = $('#fLinkQ').value.trim().toLowerCase(), day = $('#fDate').value;
+  let list;
+  if (q) list = S.old.filter(c => c.name.toLowerCase().includes(q)).slice(0, 30).map(c => ({c, m: S.pick ? hav(S.pick, c) * 1000 : null}));
+  else if (S.pick) list = S.old.map(c => ({c, m: hav(S.pick, c) * 1000})).filter(x => x.m <= 1000)
+    .sort((a, b) => (a.c.date !== day) - (b.c.date !== day) || a.m - b.m).slice(0, 12);   // วันเดียวกันก่อน แล้วใกล้สุด
+  else list = [];
+  const dist = m => m == null ? '' : m < 1000 ? ` · ${Math.round(m)} ม.` : ` · ${(m / 1000).toFixed(1)} กม.`;
+  $('#fLink').innerHTML = '<option value="">🆕 บ้านใหม่ (ไม่ใช่ลูกค้าเดิม)</option>' +
+    list.map(({c, m}) => `<option value="${c.id}">${esc(c.name)} · วัน${esc(c.date)}${dist(m)}</option>`).join('') +
+    (!q && !list.length ? `<option value="" disabled>${S.pick ? 'ไม่มีลูกค้าเดิมในระยะ 1 กม.' : 'ใส่ตำแหน่งก่อน จะแสดงลูกค้าเดิมที่อยู่ใกล้'}</option>` : '');
+  if (list.some(x => String(x.c.id) === keep)) $('#fLink').value = keep;
+}
+$('#fLinkQ').oninput = paintLink;
+$('#fLink').onchange = () => {
+  const o = S.old && S.old.find(c => c.id === +$('#fLink').value);
+  if (!o) return;
+  if (!$('#fName').value.trim()) $('#fName').value = o.name;
+  if (o.zone && !$('#fZoneSel').value) fillZones($('#fDate').value, o.zone);
+  document.querySelectorAll('#fPrices [data-pk]').forEach(i => { if (!i.value && o.prices && o.prices[i.dataset.pk] != null) i.value = o.prices[i.dataset.pk]; });
+};
+// ---------- GPS ----------
+function useGps(){
+  const done = () => { $('#gpsLoc').disabled = false; $('#gpsLoc').textContent = '📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)'; };
+  if (!navigator.geolocation){ $('#locInfo').textContent = 'เครื่องนี้ใช้ตำแหน่งไม่ได้ แตะบนแผนที่ หรือพิมพ์เองแทน'; $('#locMore').open = true; return; }
+  $('#gpsLoc').disabled = true; $('#gpsLoc').textContent = '⏳ กำลังหาตำแหน่ง…';
+  $('#locInfo').textContent = 'ถ้ามือถือถามสิทธิ์ใช้ตำแหน่ง ให้กด “อนุญาต”';
+  navigator.geolocation.getCurrentPosition(p => {
+    done();
+    if (S.view !== 'form') return;
+    $('#fLoc').value = `${p.coords.latitude.toFixed(6)}, ${p.coords.longitude.toFixed(6)}`; updateLocInfo();
+    const acc = Math.round(p.coords.accuracy || 0);
+    $('#locInfo').innerHTML += ` <span class="${acc > 30 ? 'note' : 'small'}">· คลาดเคลื่อนประมาณ ${acc} ม.${acc > 30 ? ' (สัญญาณอ่อน ตรวจหมุดบนแผนที่ หรือแตะแก้)' : ''}</span>`;
+    drawMarkers(); map.setView([S.pick.lat, S.pick.lng], 17); paintLink();
+  }, err => {
+    done(); $('#locMore').open = true;
+    $('#locInfo').textContent = err && err.code === 1 ? 'มือถือไม่อนุญาตให้ใช้ตำแหน่ง: เปิดสิทธิ์ “ตำแหน่ง” ให้ Safari/Chrome ในการตั้งค่ามือถือ แล้วกดปุ่มอีกครั้ง หรือแตะบนแผนที่แทน'
+      : 'หาตำแหน่งไม่ได้ ลองกดอีกครั้งในที่โล่ง หรือแตะบนแผนที่แทน';
+  }, {enableHighAccuracy: true, timeout: 20000, maximumAge: 0});
+}
+$('#gpsLoc').onclick = useGps;
 // zones offered in the form = zones that already have customers on the chosen day (most customers first)
 function fillZones(day, keep){
   const count = new Map();
@@ -623,22 +696,22 @@ function fillZones(day, keep){
   $('#zoneHint').textContent = `ของวัน${day}`;
   $('#fZone').value = ''; $('#fZone').hidden = true;
 }
-$('#fDate').onchange = () => fillZones($('#fDate').value, '');
+$('#fDate').onchange = () => { fillZones($('#fDate').value, ''); paintLink(); };
 $('#fZoneSel').onchange = () => { const isNew = $('#fZoneSel').value === '__new'; $('#fZone').hidden = !isNew; if (isNew) $('#fZone').focus(); };
-function closeForm(){ const back = S.formBack; S.formBack = null; S.editing = null; S.pick = null; S.tapMode = false; $('#tapLoc').textContent = '📍 แตะบนแผนที่'; if (back === 'hist') openHist(S.hist && S.hist.id); else show('cust'); drawMarkers(); }
+function closeForm(){ const back = S.formBack; S.formBack = null; S.editing = null; S.pick = null; S.tapMode = false; $('#tapLoc').textContent = '🗺️ แตะบนแผนที่'; if (back === 'hist') openHist(S.hist && S.hist.id); else show('cust'); drawMarkers(); }
 function updateLocInfo(){
   const p = parseLoc($('#fLoc').value);
   if (p){ S.pick = {lat:p.lat, lng:p.lng}; $('#locInfo').innerHTML = `<span class="ok">✓ ${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span>`; }
   else { $('#locInfo').textContent = $('#fLoc').value.trim() ? 'อ่านตำแหน่งไม่ได้ ลองใส่ Plus Code หรือแตะบนแผนที่' : ''; if ($('#fLoc').value.trim()) S.pick = null; }
 }
-$('#fLoc').oninput = () => { updateLocInfo(); drawMarkers(); if (S.pick) map.setView([S.pick.lat, S.pick.lng], Math.max(map.getZoom(), 15)); };
+$('#fLoc').oninput = () => { updateLocInfo(); drawMarkers(); paintLink(); if (S.pick) map.setView([S.pick.lat, S.pick.lng], Math.max(map.getZoom(), 15)); };
 $('#addBtn').onclick = () => openForm(null);
 $('#cancelBtn').onclick = closeForm;
 $('#tapLoc').onclick = () => { S.tapMode = true; $('#tapLoc').textContent = 'แตะตำแหน่งบ้านบนแผนที่…'; if (innerWidth <= 760) window.scrollTo(0,0); };
 map.on('click', e => {
   if (!S.tapMode) return;
-  S.tapMode = false; $('#tapLoc').textContent = '📍 แตะบนแผนที่';
-  $('#fLoc').value = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`; updateLocInfo(); drawMarkers();
+  S.tapMode = false; $('#tapLoc').textContent = '🗺️ แตะบนแผนที่';
+  $('#fLoc').value = `${e.latlng.lat.toFixed(6)}, ${e.latlng.lng.toFixed(6)}`; updateLocInfo(); drawMarkers(); paintLink();
 });
 $('#form').onsubmit = async e => {
   e.preventDefault();
@@ -650,8 +723,12 @@ $('#form').onsubmit = async e => {
     name: $('#fName').value.trim(), date: $('#fDate').value.trim(), zone: $('#fZoneSel').value === '__new' ? $('#fZone').value.trim() : $('#fZoneSel').value,
     note: $('#fNote').value.trim(), status: S.editing ? S.editing.status : 'ใช้งาน', prices
   };
+  if (S.set === 'ใหม่'){
+    if (S.editing) c.order = $('#fOrder').value.trim();
+    else if (+$('#fLink').value) c.linkId = +$('#fLink').value;
+  }
   if (!c.name || !c.date){ $('#formMsg').textContent = 'กรุณาใส่ชื่อและวันส่ง'; return; }
-  if (!p){ $('#formMsg').textContent = 'กรุณาใส่ตำแหน่งบ้าน (Plus Code, พิกัด หรือแตะบนแผนที่)'; return; }
+  if (!p){ $('#formMsg').textContent = 'กรุณาใส่ตำแหน่งบ้าน: กดปุ่ม “📍 ใช้ตำแหน่งปัจจุบัน” หรือแตะบนแผนที่'; return; }
   Object.assign(c, {lat: +p.lat.toFixed(6), lng: +p.lng.toFixed(6), plus: p.plus || ''});
   $('#saveBtn').disabled = true; $('#formMsg').textContent = 'กำลังบันทึกลง Google Sheets…';
   try{
@@ -659,6 +736,10 @@ $('#form').onsubmit = async e => {
     saved.date = dayName(saved.date) || saved.date;
     const i = S.all.findIndex(x => x.id === saved.id);
     if (i >= 0) S.all[i] = saved; else S.all.push(saved);
+    if (S.set === 'ใหม่'){
+      if (S.old) S.old = S.old.filter(x => x.id !== saved.id);
+      try{ const res = await call('getCustomers'); S.all = res.customers; S.all.forEach(x => { x.date = dayName(x.date) || x.date; }); store.set('customers', S.all); }catch(e){}   // ลำดับของบ้านอื่นเลื่อนตาม
+    }
     const wasNew = !S.editing, back = S.formBack;
     closeForm(); clearResult();
     if (back !== 'hist'){
@@ -703,11 +784,7 @@ async function refreshDone(){
 }
 function guessQty(c){
   const last = store.get('last.' + c.id, null);
-  if (last) return Object.assign({}, last);
-  const q = {}, note = String(c.note || '');
-  const m1 = note.match(/(\d+)\s*ลัง/), m2 = note.match(/(\d+)\s*ถัง/);
-  if (m1) q.crate = +m1[1]; if (m2) q.tank = +m2[1];
-  return q;
+  return last ? Object.assign({}, last) : {};   // จำนวนครั้งก่อนที่เครื่องนี้บันทึก (หมายเหตุไม่ใช่จำนวนของแล้ว)
 }
 function stepRow(k, label, sub, v){
   return `<div class="step"><div class="sl"><b>${esc(label)}</b><span class="small">${esc(sub)}</span></div>
@@ -722,7 +799,7 @@ function openRec(c, from){
   S.rec = {c, from, q, ret, method: '', gps: null};
   $('#recWhere').textContent = from === 'route' && S.result ? `จุดที่ ${(S.result.cur || 0) + 1} จาก ${S.result.order.length}` : 'บันทึกการส่ง';
   $('#recName').textContent = c.name;
-  $('#recInfo').innerHTML = `${esc(c.zone)}${c.note ? ` · <span class="note">📦 ${esc(c.note)}</span>` : ''}`;
+  $('#recInfo').innerHTML = `${esc(c.zone)}${c.note ? ` · <span class="note">📝 ${esc(c.note)}</span>` : ''}`;
   $('#recQ').innerHTML = S.products.map(p => stepRow(p.key, p.name, `${priceOf(c, p.key)} ฿`, q[p.key] || 0)).join('');
   $('#recR').innerHTML = S.products.filter(p => p.returns).map(p => stepRow('r-' + p.key, p.name + 'เปล่า', 'รับคืน', ret[p.key] || 0)).join('');
   $('#recNote').value = ''; $('#recMsg').textContent = '';
@@ -1116,7 +1193,7 @@ function renderResult(){
     <div class="drive">
       <div class="small">จุดที่ ${cur+1} จาก ${n}${cur ? ` · ผ่านมาแล้ว ${cur} จุด` : ''}</div>
       <div class="dn">${esc(c.name)}</div>
-      <div class="small">${esc(c.zone)}${c.note?` · <span class="note">📦 ${esc(c.note)}</span>`:''}</div>
+      <div class="small">${esc(c.zone)}${c.note?` · <span class="note">📝 ${esc(c.note)}</span>`:''}</div>
       ${done[c.id] ? `<div class="rec-ok">✓ บันทึกแล้ว: ${esc(done[c.id])}</div>` : ''}
       <a class="navbtn" target="_blank" rel="noopener" href="${navUrl(c)}">🧭 นำทางไปจุดนี้ (GPS)</a>
       <div class="row">
@@ -1139,7 +1216,7 @@ function renderResult(){
     ${saveKm > 0.05 ? `<p class="save">สั้นกว่าวิ่งตามลำดับในรายการ ${saveKm.toFixed(1)} กม. · ขับน้อยลงราว ${hm(r.secSheet - r.sec)}</p>` : ''}
     ${r.road ? '' : '<div class="banner">เชื่อมต่อระบบคำนวณถนนไม่ได้ ระยะทางบางช่วงเป็นค่าประมาณจากเส้นตรง กด “คำนวณเส้นทาง” อีกครั้งเมื่อมีสัญญาณ ระบบจะดึงเฉพาะส่วนที่ขาด</div>'}
     <h3>ลำดับการส่ง <span class="small">(แตะเพื่อข้ามไปจุดนั้น)</span></h3>
-    <ol class="stops">${r.order.map((s,i)=>`<li data-i="${i}" class="${done[s.id]?'done':i===cur?'now':''}"><span class="num">${done[s.id]?'✓':i+1}</span><div style="flex:1;min-width:0"><div class="n">${esc(s.name)}</div><div class="small">${done[s.id] ? `<span class="rec-ok">${esc(done[s.id])}</span>` : esc(s.zone) + (s.note?` · <span class="note">📦 ${esc(s.note)}</span>`:'')}</div></div><a class="go" target="_blank" rel="noopener" href="${navUrl(s)}" aria-label="นำทางไป ${esc(s.name)}">🧭</a></li>`).join('')}</ol>`;
+    <ol class="stops">${r.order.map((s,i)=>`<li data-i="${i}" class="${done[s.id]?'done':i===cur?'now':''}"><span class="num">${done[s.id]?'✓':i+1}</span><div style="flex:1;min-width:0"><div class="n">${esc(s.name)}</div><div class="small">${done[s.id] ? `<span class="rec-ok">${esc(done[s.id])}</span>` : esc(s.zone) + (s.note?` · <span class="note">📝 ${esc(s.note)}</span>`:'')}</div></div><a class="go" target="_blank" rel="noopener" href="${navUrl(s)}" aria-label="นำทางไป ${esc(s.name)}">🧭</a></li>`).join('')}</ol>`;
 }
 function setCur(i){
   const r = S.result; if (!r) return;
@@ -1362,6 +1439,34 @@ $('#pSave').onclick = async () => {
   finally{ $('#pSave').disabled = false; }
 };
 
+// ---------- owner: which customer list the app uses ----------
+function renderSet(){
+  const n = S.counts || {old: 0, new: 0}, isNew = S.set === 'ใหม่';
+  $('#setInfo').innerHTML = isNew
+    ? `แอปใช้ <b>ชุดใหม่</b> (${n.new} บ้าน เพิ่มทีละบ้านด้วยปุ่ม “+ เพิ่มลูกค้า” ตามเส้นทางจริง) · ชุดเก่า ${n.old} บ้านยังเก็บอยู่ในชีต “ลูกค้า (แอป)”`
+    : `แอปใช้ <b>ชุดเก่า</b> (${n.old} บ้าน) · ชุดใหม่มี ${n.new} บ้าน`;
+  $('#setBtn').textContent = isNew ? 'กลับไปใช้ชุดเก่า' : 'เริ่มใช้ชุดใหม่ (รายชื่อว่าง แล้วเพิ่มทีละบ้าน)';
+  $('#setConfirm').hidden = true;
+}
+$('#setBtn').onclick = () => {
+  const toNew = S.set !== 'ใหม่', n = S.counts || {old: 0, new: 0};
+  $('#setWarn').innerHTML = toNew
+    ? `หลังกดยืนยัน รายชื่อลูกค้าในแอปจะเหลือ <b>${n.new} บ้าน</b> ทุกวัน (คนขับจะเห็นเหมือนกัน) ลูกค้าเก่า ${n.old} บ้านไม่ถูกลบ ยังอยู่ในชีต และกดกลับมาใช้ชุดเก่าได้`
+    : `แอปจะกลับไปใช้รายชื่อชุดเก่า ${n.old} บ้าน ชุดใหม่ ${n.new} บ้านยังเก็บไว้ในชีต “ลูกค้า (ใหม่)”`;
+  $('#setConfirm').hidden = false;
+};
+$('#setNo').onclick = () => $('#setConfirm').hidden = true;
+$('#setYes').onclick = async () => {
+  if (outbox.list().length){ toast('ยังมีรายการรอส่ง กด “ส่งตอนนี้” ก่อน'); return; }
+  $('#setYes').disabled = true;
+  try{
+    await call('setCustomerSet', S.set === 'ใหม่' ? 'เก่า' : 'ใหม่');
+    S.old = null; Object.keys(localStorage).filter(k => /^route\.route\./.test(k)).forEach(k => { try{ localStorage.removeItem(k); }catch(e){} });   // เส้นทางที่จำไว้เป็นของชุดเดิม
+    await load(); show('cust'); toast(S.set === 'ใหม่' ? 'เริ่มใช้ชุดใหม่แล้ว กด “+ เพิ่มลูกค้า” ที่หน้าบ้าน' : 'กลับไปใช้ชุดเก่าแล้ว');
+  }catch(err){ toast('สลับไม่สำเร็จ: ' + err.message); }
+  finally{ $('#setYes').disabled = false; }
+};
+
 // ---------- load ----------
 function askPin(msg){
   $('#lock').hidden = false; $('#pinMsg').textContent = msg || ''; $('#pin').value = ''; $('#pin').focus();
@@ -1388,6 +1493,7 @@ async function load(){
   try{
     const res = await call('getCustomers');
     S.role = res.role; S.all = res.customers; store.set('pin', S.pin); store.set('role', S.role); applyRole();
+    S.set = res.set || 'เก่า'; S.counts = res.counts || null; store.set('set', S.set); renderSet();
     if (res.products && res.products.length){ S.products = res.products; store.set('products', S.products); }
     store.set('customers', S.all);
     $('#lock').hidden = true;
