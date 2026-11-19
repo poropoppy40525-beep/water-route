@@ -50,6 +50,11 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 #locMore > summary{display:inline-block;list-style:none;margin-top:6px;padding:3px 10px;border:1px solid var(--warn);border-radius:6px;
   background:var(--warn-bg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
 #locMore > summary::-webkit-details-marker{display:none}
+/* "เป็นลูกค้าเดิม?" ซ่อนไว้ กดเปิดเมื่อจะค้นหา */
+#linkBox > summary{display:inline-block;list-style:none;margin-top:8px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--text);font-size:15px;cursor:pointer}
+#linkBox > summary::-webkit-details-marker{display:none}
+#linkBox[open] > summary{font-weight:700}
 #locMore[open] > summary{border-style:solid;background:transparent}
 #tapLoc{width:100%;font-weight:700}
 button.green{background:var(--good);color:var(--good-ink);border-color:var(--good);font-weight:700}
@@ -221,12 +226,14 @@ body.staff .admin-only{display:none!important}
           <div class="row" style="margin-top:8px"><button type="button" id="tapLoc">🗺️ แตะบนแผนที่</button></div>
           <input type="text" id="fLoc" aria-label="ตำแหน่งบ้าน" placeholder="Plus Code, พิกัด 18.33, 99.52 หรือวางลิงก์ Google Maps" style="margin-top:6px">
         </details>
-        <div class="box" id="linkBox" hidden>
-          <b>เป็นลูกค้าเดิมไหม?</b>
-          <p class="small" style="margin:4px 0">ถ้าเป็นบ้านเดิม ประวัติส่ง หนี้ ถังค้าง และราคาพิเศษจะตามมาด้วย</p>
-          <select id="fLink" aria-label="ลูกค้าเดิม"></select>
-          <input type="search" id="fLinkQ" placeholder="หรือค้นหาชื่อลูกค้าเดิม" style="margin-top:6px">
-        </div>
+        <details id="linkBox" hidden>
+          <summary id="linkSum">🔗 เป็นลูกค้าเดิม? กดเพื่อค้นหา</summary>
+          <div class="box" style="margin-top:6px">
+            <p class="small" style="margin:0 0 4px">ถ้าเป็นบ้านเดิม ประวัติส่ง หนี้ ถังค้าง และราคาพิเศษจะตามมาด้วย</p>
+            <select id="fLink" aria-label="ลูกค้าเดิม"></select>
+            <input type="search" id="fLinkQ" placeholder="หรือค้นหาชื่อลูกค้าเดิม" style="margin-top:6px">
+          </div>
+        </details>
         <label class="f" id="fAfterRow" hidden><span>ลำดับในเส้นทาง: ต่อจากบ้านไหน</span><select id="fAfter"></select></label>
         <label class="f" id="fOrderRow" hidden><span>ลำดับในเส้นทางวันนี้ (เปลี่ยนเลขเพื่อย้ายตำแหน่ง)</span><input type="number" id="fOrder" inputmode="numeric" min="1"></label>
         <label class="f"><span>หมายเหตุ</span><input type="text" id="fNote" placeholder="เช่น จุดสังเกตบ้าน วางของตรงไหน"></label>
@@ -732,7 +739,8 @@ function openForm(c){
   // ชุดใหม่: บ้านที่เพิ่มใหม่เลือกได้ว่าเป็นลูกค้าเดิมคนไหน; บ้านที่มีอยู่แล้วแก้ลำดับได้
   const isNewSet = S.set === 'ใหม่';
   $('#fOrderRow').hidden = !(isNewSet && c); $('#fOrder').value = c && c.order ? c.order : '';
-  $('#linkBox').hidden = !(isNewSet && !c); $('#fLinkQ').value = ''; S.linkPrices = null;
+  $('#linkBox').hidden = !(isNewSet && !c); $('#linkBox').open = false; $('#fLinkQ').value = ''; S.linkPrices = null;
+  $('#fLink').value = ''; paintLinkSum();
   $('#fAfterRow').hidden = !(isNewSet && !c); fillAfter();
   if (isNewSet && !c) loadOld();
   updateLocInfo(); show('form'); drawMarkers();
@@ -767,9 +775,16 @@ function paintLink(){
     list.map(({c, m}) => `<option value="${c.id}">${esc(c.name)} · วัน${esc(c.date)}${dist(m)}</option>`).join('') +
     (!q && !list.length ? `<option value="" disabled>${S.pick ? 'ไม่มีลูกค้าเดิมในระยะ 1 กม.' : 'ใส่ตำแหน่งก่อน จะแสดงลูกค้าเดิมที่อยู่ใกล้'}</option>` : '');
   if (list.some(x => String(x.c.id) === keep)) $('#fLink').value = keep;
+  paintLinkSum();
+}
+// ปุ่มที่ปิดอยู่บอกว่าเลือกลูกค้าเดิมคนไหนไว้ จะได้ไม่ลืมว่าผูกไว้แล้ว
+function paintLinkSum(){
+  const o = S.old && S.old.find(c => c.id === +$('#fLink').value);
+  $('#linkSum').textContent = o ? '🔗 ลูกค้าเดิม: ' + o.name + ' (กดเพื่อเปลี่ยน)' : '🔗 เป็นลูกค้าเดิม? กดเพื่อค้นหา';
 }
 $('#fLinkQ').oninput = paintLink;
 $('#fLink').onchange = () => {
+  paintLinkSum();
   const o = S.old && S.old.find(c => c.id === +$('#fLink').value);
   if (!o) return;
   if (!$('#fName').value.trim()) $('#fName').value = o.name;
