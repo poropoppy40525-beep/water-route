@@ -47,12 +47,11 @@ select,input[type=text],input[type=search],input[type=number],input[type=date]{f
 button{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:8px 12px;min-height:42px;cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
 /* ปุ่ม "ตำแหน่งไม่ตรง?" ให้เห็นชัด กดง่าย (ผู้สูงอายุ) */
-#locMore > summary{display:block;list-style:none;margin-top:10px;padding:12px;border:2px solid var(--warn);border-radius:10px;
-  background:var(--warn-bg);color:var(--text);font-size:17px;font-weight:700;text-align:center;cursor:pointer}
+#locMore > summary{display:block;list-style:none;margin-top:8px;padding:7px 10px;border:2px solid var(--warn);border-radius:8px;
+  background:var(--warn-bg);color:var(--text);font-size:15px;font-weight:700;text-align:center;cursor:pointer}
 #locMore > summary::-webkit-details-marker{display:none}
-#locMore > summary .sub{display:block;font-size:14px;font-weight:400;color:var(--muted);margin-top:2px}
 #locMore[open] > summary{border-style:solid;background:transparent}
-#tapLoc{width:100%;padding:12px;font-size:16px;font-weight:700}
+#tapLoc{width:100%;font-weight:700}
 button.green{background:var(--good);color:var(--good-ink);border-color:var(--good);font-weight:700}
 button.danger{color:var(--bad);border-color:var(--bad);background:none}
 button.link{border:0;background:none;color:var(--accent);padding:4px 6px;min-height:0}
@@ -218,7 +217,7 @@ body.staff .admin-only{display:none!important}
         <button type="button" class="primary" id="gpsLoc" style="width:100%;padding:12px">📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)</button>
         <p class="small" id="locInfo" style="margin:6px 0"></p>
         <details id="locMore">
-          <summary>⚠️ ตำแหน่งไม่ตรง? กดตรงนี้<span class="sub">แตะบนแผนที่ หรือพิมพ์ตำแหน่งเอง</span></summary>
+          <summary>⚠️ ตำแหน่งไม่ตรง? กดตรงนี้</summary>
           <div class="row" style="margin-top:8px"><button type="button" id="tapLoc">🗺️ แตะบนแผนที่</button></div>
           <input type="text" id="fLoc" aria-label="ตำแหน่งบ้าน" placeholder="Plus Code, พิกัด 18.33, 99.52 หรือวางลิงก์ Google Maps" style="margin-top:6px">
         </details>
