@@ -46,9 +46,9 @@ select,input[type=text],input[type=search],input[type=number],input[type=date]{f
 #day{flex:1;min-width:0;width:auto}
 button{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:8px 12px;min-height:42px;cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
-/* ปุ่ม "ตำแหน่งไม่ตรง?" ให้เห็นชัด กดง่าย (ผู้สูงอายุ) */
-#locMore > summary{display:block;list-style:none;margin-top:8px;padding:7px 10px;border:2px solid var(--warn);border-radius:8px;
-  background:var(--warn-bg);color:var(--text);font-size:15px;font-weight:700;text-align:center;cursor:pointer}
+/* ปุ่ม "ตำแหน่งไม่ตรง?" แบบกะทัดรัด ไม่แย่งสายตาจากปุ่ม GPS */
+#locMore > summary{display:inline-block;list-style:none;margin-top:6px;padding:3px 10px;border:1px solid var(--warn);border-radius:6px;
+  background:var(--warn-bg);color:var(--text);font-size:13px;font-weight:600;cursor:pointer}
 #locMore > summary::-webkit-details-marker{display:none}
 #locMore[open] > summary{border-style:solid;background:transparent}
 #tapLoc{width:100%;font-weight:700}
