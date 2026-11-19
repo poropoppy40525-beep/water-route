@@ -1750,6 +1750,13 @@ async function load(){
 $('#reload').onclick = () => { show('cust'); load(); };
 show('cust'); drawMarkers(); paintSync(); load();
 </script>
-<script>if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));</script>
+<button type="button" id="newVer" hidden onclick="location.reload()" style="position:fixed;left:12px;right:12px;bottom:12px;z-index:9999;padding:14px;font-size:17px;font-weight:700;background:#16a34a;color:#fff;border:0;border-radius:10px;box-shadow:0 4px 14px rgba(0,0,0,.3)">🔄 มีแอปเวอร์ชันใหม่ กดตรงนี้เพื่อโหลด</button>
+<script>if ('serviceWorker' in navigator) {
+  const had = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => { if (had) document.getElementById('newVer').hidden = false; });
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js', {updateViaCache: 'none'}).then(reg => {
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') reg.update().catch(() => {}); });
+  }).catch(() => {}));
+}</script>
 </body>
 </html>

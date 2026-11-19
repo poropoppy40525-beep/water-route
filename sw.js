@@ -1,6 +1,6 @@
 // Service worker for the installed app. The app screen and libraries are kept on the phone so it opens without signal;
 // customer data and saving always go to Google Sheets (records wait in the app's outbox while offline).
-const VERSION = '42db823ebe';
+const VERSION = 'ab589874cb';
 const SHELL = 'shell-' + VERSION, TILES = 'tiles-v1';
 const PRECACHE = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'apple-touch-icon.png',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js',
@@ -28,7 +28,8 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (req.mode === 'navigate' || url.origin === location.origin) {         // app screen: newest when online, saved copy offline
-    e.respondWith(fetch(req).then(res => {
+    // no-cache: ask GitHub every time (it lets phones keep the old page for 10 minutes otherwise)
+    e.respondWith(fetch(req, {cache: 'no-cache'}).then(res => {
       if (res.ok) caches.open(SHELL).then(c => c.put(req, res.clone()));
       return res;
     }).catch(() => caches.match(req).then(r => r || caches.match('index.html'))));
