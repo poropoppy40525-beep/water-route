@@ -19,12 +19,12 @@
 <style>
 :root{
   --bg:#f4f7fa; --panel:#ffffff; --text:#14202b; --muted:#5d6b78; --line:#dde4ea;
-  --accent:#0a7bc2; --accent-ink:#ffffff; --good:#1a8a4a; --good-ink:#ffffff; --warn:#b26a00; --bad:#c0392b; --chip:#eaf3fa;
+  --accent:#0a7bc2; --accent-ink:#ffffff; --good:#1a8a4a; --good-ink:#ffffff; --warn:#b26a00; --warn-bg:#fff4e0; --bad:#c0392b; --chip:#eaf3fa;
 }
 @media (prefers-color-scheme: dark){
   :root{
     --bg:#0f161c; --panel:#18222b; --text:#e6edf3; --muted:#9aa8b4; --line:#2a3743;
-    --accent:#4fb0ef; --accent-ink:#06121b; --good:#4cc47f; --good-ink:#06121b; --warn:#f0a840; --bad:#ff7a6b; --chip:#1f3342;
+    --accent:#4fb0ef; --accent-ink:#06121b; --good:#4cc47f; --good-ink:#06121b; --warn:#f0a840; --warn-bg:#3a2a10; --bad:#ff7a6b; --chip:#1f3342;
     color-scheme:dark;
   }
 }
@@ -46,6 +46,13 @@ select,input[type=text],input[type=search],input[type=number],input[type=date]{f
 #day{flex:1;min-width:0;width:auto}
 button{font:inherit;border:1px solid var(--line);background:var(--bg);color:var(--text);border-radius:8px;padding:8px 12px;min-height:42px;cursor:pointer}
 button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+/* ปุ่ม "ตำแหน่งไม่ตรง?" ให้เห็นชัด กดง่าย (ผู้สูงอายุ) */
+#locMore > summary{display:block;list-style:none;margin-top:10px;padding:12px;border:2px solid var(--warn);border-radius:10px;
+  background:var(--warn-bg);color:var(--text);font-size:17px;font-weight:700;text-align:center;cursor:pointer}
+#locMore > summary::-webkit-details-marker{display:none}
+#locMore > summary .sub{display:block;font-size:14px;font-weight:400;color:var(--muted);margin-top:2px}
+#locMore[open] > summary{border-style:solid;background:transparent}
+#tapLoc{width:100%;padding:12px;font-size:16px;font-weight:700}
 button.green{background:var(--good);color:var(--good-ink);border-color:var(--good);font-weight:700}
 button.danger{color:var(--bad);border-color:var(--bad);background:none}
 button.link{border:0;background:none;color:var(--accent);padding:4px 6px;min-height:0}
@@ -211,8 +218,8 @@ body.staff .admin-only{display:none!important}
         <button type="button" class="primary" id="gpsLoc" style="width:100%;padding:12px">📍 ใช้ตำแหน่งปัจจุบัน (ยืนอยู่หน้าบ้าน)</button>
         <p class="small" id="locInfo" style="margin:6px 0"></p>
         <details id="locMore">
-          <summary class="small">ตำแหน่งไม่ตรง? แตะบนแผนที่ หรือพิมพ์เอง</summary>
-          <div class="row" style="margin-top:6px"><button type="button" id="tapLoc">🗺️ แตะบนแผนที่</button></div>
+          <summary>⚠️ ตำแหน่งไม่ตรง? กดตรงนี้<span class="sub">แตะบนแผนที่ หรือพิมพ์ตำแหน่งเอง</span></summary>
+          <div class="row" style="margin-top:8px"><button type="button" id="tapLoc">🗺️ แตะบนแผนที่</button></div>
           <input type="text" id="fLoc" aria-label="ตำแหน่งบ้าน" placeholder="Plus Code, พิกัด 18.33, 99.52 หรือวางลิงก์ Google Maps" style="margin-top:6px">
         </details>
         <div class="box" id="linkBox" hidden>
